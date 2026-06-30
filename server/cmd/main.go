@@ -49,12 +49,16 @@ func main() {
 			message = fmt.Sprintf("%v", he.Message)
 		}
 		c.JSON(code, handlers.ErrorResponse{
-			Error: handlers.ErrorBody{Code: http.StatusText(code), Message: message},
+			Error: handlers.ErrorBody{
+				Code:    http.StatusText(code),
+				Message: message,
+			},
 		})
 	}
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+
 	store := middleware.NewRateLimiterMemoryStore(rate.Limit(100))
 	e.Use(middleware.RateLimiter(store))
 
@@ -80,6 +84,7 @@ func main() {
 
 	protected := api.Group("")
 	protected.Use(authmiddleware.AuthMiddleware(cfg.JWTSecret))
+
 	protected.GET("/auth/me", authHandler.Me)
 
 	profileHandler := &handlers.ProfileHandler{DB: db}
@@ -110,7 +115,9 @@ func main() {
 		if err != nil {
 			e.Logger.Fatal("Failed to get embedded FS:", err)
 		}
+
 		e.GET("/assets/*", echo.WrapHandler(http.FileServer(http.FS(subFS))))
+
 		e.GET("/*", func(c echo.Context) error {
 			data, err := fs.ReadFile(subFS, "index.html")
 			if err != nil {
@@ -120,7 +127,7 @@ func main() {
 		})
 	}
 
-	slog.Info("DaveChat API iniciado", "port", cfg.Port, "url", "http://0.0.0.0:"+cfg.Port)
+	slog.Info("🚀 DaveChat API iniciado", "port", cfg.Port, "url", "http://0.0.0.0:"+cfg.Port)
 
 	go func() {
 		if err := e.Start("0.0.0.0:" + cfg.Port); err != nil && err != http.ErrServerClosed {
