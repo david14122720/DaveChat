@@ -45,6 +45,7 @@ CREATE INDEX idx_profiles_presence ON profiles(status, last_seen);
 CREATE INDEX idx_profiles_username ON profiles(username);
 CREATE INDEX idx_messages_conv_created_desc ON messages(conversation_id, created_at DESC);
 
+-- Read receipts
 CREATE TABLE IF NOT EXISTS read_receipts (
     message_id CHAR(36) NOT NULL,
     user_id CHAR(36) NOT NULL,
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS read_receipts (
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Refresh tokens
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id CHAR(36) PRIMARY KEY,
     user_id CHAR(36) NOT NULL,
@@ -65,6 +67,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Call logs
 CREATE TABLE IF NOT EXISTS call_logs (
     id CHAR(36) PRIMARY KEY,
     caller_id CHAR(36) NOT NULL,
@@ -80,4 +83,5 @@ CREATE TABLE IF NOT EXISTS call_logs (
     FOREIGN KEY (callee_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Full-text search on messages
 ALTER TABLE messages ADD FULLTEXT INDEX IF NOT EXISTS ft_messages_content (content);
