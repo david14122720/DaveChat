@@ -1,45 +1,52 @@
 #!/bin/sh
 set -e
 
+MARIADB_USER="${MARIADB_USER:-mysql}"
+MARIADB_DATADIR="${MARIADB_DATADIR:-/var/lib/mysql}"
+DB_NAME="${DB_NAME:-davechat}"
+DB_USER="${DB_USER:-davechat}"
+DB_PASS="${DB_PASS:-davechat_pass}"
+
 # Initialize MariaDB data directory if first run
-if [ ! -d "/var/lib/mysql/mysql" ]; then
+if [ ! -d "$MARIADB_DATADIR/mysql" ]; then
     echo "→ Initializing MariaDB data directory..."
-    mariadb-install-db --user=mysql --datadir=/var/lib/mysql
+    mariadb-install-db --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR"
 fi
 
 # Start MariaDB in background
 echo "→ Starting MariaDB..."
-mariadbd --user=mysql --datadir=/var/lib/mysql &
+mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" &
 MARIADB_PID=$!
 
-# Wait for MariaDB to be ready
-for i in $(seq 30); do
+# Wait for MariaDB to be ready (busybox-compatible loop)
+echo "→ Waiting for MariaDB..."
+i=0
+while [ $i -lt 30 ]; do
     if mariadb-admin ping --silent 2>/dev/null; then
         break
     fi
-    if [ "$i" = "30" ]; then
-        echo "✗ MariaDB failed to start"
-        exit 1
-    fi
+    i=$((i + 1))
     sleep 1
 done
 
+if ! mariadb-admin ping --silent 2>/dev/null; then
+    echo "✗ MariaDB failed to start after 30s"
+    exit 1
+fi
+
 echo "→ MariaDB ready, initializing database..."
 
-# Create database and user
 mariadb -u root -e "
-    CREATE DATABASE IF NOT EXISTS davechat
+    CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`
         CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    CREATE USER IF NOT EXISTS 'davechat'@'localhost'
-        IDENTIFIED BY 'davechat_pass';
-    GRANT ALL PRIVILEGES ON davechat.* TO 'davechat'@'localhost';
+    CREATE USER IF NOT EXISTS '$DB_USER'@'localhost'
+        IDENTIFIED BY '$DB_PASS';
+    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
     FLUSH PRIVILEGES;
 "
 
 # Run schema
-mariadb -u root davechat < /app/infra/mariadb/init.sql
+mariadb -u root "$DB_NAME" < /app/infra/mariadb/init.sql
 
 echo "→ Database ready, starting DaveChat..."
-
-# Execute the main application
 exec "$@"
