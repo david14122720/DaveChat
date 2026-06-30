@@ -38,10 +38,13 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_created ON messages(created_at);
 CREATE INDEX idx_participants_user ON participants(user_id);
 CREATE INDEX idx_conversations_last_msg ON conversations(last_message_at DESC);
+CREATE INDEX idx_profiles_presence ON profiles(status, last_seen);
+CREATE INDEX idx_profiles_username ON profiles(username);
+CREATE INDEX idx_messages_conv_created_desc ON messages(conversation_id, created_at DESC);
 
--- Read receipts
 CREATE TABLE IF NOT EXISTS read_receipts (
     message_id CHAR(36) NOT NULL,
     user_id CHAR(36) NOT NULL,
@@ -51,7 +54,6 @@ CREATE TABLE IF NOT EXISTS read_receipts (
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Refresh tokens
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id CHAR(36) PRIMARY KEY,
     user_id CHAR(36) NOT NULL,
@@ -63,13 +65,12 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Call logs
 CREATE TABLE IF NOT EXISTS call_logs (
     id CHAR(36) PRIMARY KEY,
     caller_id CHAR(36) NOT NULL,
     callee_id CHAR(36) NOT NULL,
     type ENUM('audio','video') NOT NULL,
-    status ENUM('missed','completed','rejected','cancelled','busy') NOT NULL,
+    status ENUM('in-progress','missed','completed','rejected','cancelled','busy') NOT NULL,
     started_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     ended_at DATETIME(3) NULL,
     duration_secs INT UNSIGNED DEFAULT 0,
@@ -79,5 +80,4 @@ CREATE TABLE IF NOT EXISTS call_logs (
     FOREIGN KEY (callee_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Full-text search on messages
 ALTER TABLE messages ADD FULLTEXT INDEX IF NOT EXISTS ft_messages_content (content);
