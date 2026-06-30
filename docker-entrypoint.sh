@@ -13,6 +13,10 @@ if [ ! -d "$MARIADB_DATADIR/mysql" ]; then
     mariadb-install-db --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR"
 fi
 
+# Ensure socket directory exists
+mkdir -p /run/mysqld
+chown "$MARIADB_USER" /run/mysqld
+
 # Start MariaDB in background
 echo "→ Starting MariaDB..."
 mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" &
