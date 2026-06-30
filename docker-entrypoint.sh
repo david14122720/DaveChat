@@ -17,9 +17,9 @@ fi
 mkdir -p /run/mysqld
 chown "$MARIADB_USER" /run/mysqld
 
-# Start MariaDB in background
+# Start MariaDB in background (explicit TCP port — Alpine defaults to port 0)
 echo "→ Starting MariaDB..."
-mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" &
+mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" --port=3306 --bind-address=127.0.0.1 &
 MARIADB_PID=$!
 
 # Wait for MariaDB to be ready (busybox-compatible loop)
