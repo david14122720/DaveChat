@@ -54,7 +54,10 @@ mariadb -u root -e "
         CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     CREATE USER IF NOT EXISTS '$DB_USER'@'localhost'
         IDENTIFIED BY '$DB_PASS';
+    CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1'
+        IDENTIFIED BY '$DB_PASS';
     GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
+    GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'127.0.0.1';
     FLUSH PRIVILEGES;
 "
 
