@@ -1,11 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import AuthLayout from './components/AuthLayout';
 import MainLayout from './components/MainLayout';
 import { useAuth } from './hooks/useAuth';
+import { CallProvider } from './contexts/CallContext';
+import CallUI from './components/CallUI';
+import { wsClient } from './lib/websocket';
 import { Loader2 } from 'lucide-react';
 
 function App() {
   const { user, loading, signIn, signUp, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      wsClient.disconnect();
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -19,19 +28,22 @@ function App() {
   }
 
   return (
-    <div className="w-full h-full">
-      {!user ? (
-        <AuthLayout 
-          onSignIn={signIn} 
-          onSignUp={signUp} 
-        />
-      ) : (
-        <MainLayout 
-          user={user} 
-          onLogout={signOut} 
-        />
-      )}
-    </div>
+    <CallProvider>
+      <CallUI />
+      <div className="w-full h-full">
+        {!user ? (
+          <AuthLayout 
+            onSignIn={signIn} 
+            onSignUp={signUp} 
+          />
+        ) : (
+          <MainLayout 
+            user={user} 
+            onLogout={signOut} 
+          />
+        )}
+      </div>
+    </CallProvider>
   );
 }
 
