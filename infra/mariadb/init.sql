@@ -8,14 +8,14 @@ CREATE TABLE IF NOT EXISTS profiles (
     last_seen DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS conversations (
     id CHAR(36) PRIMARY KEY,
     type ENUM('direct','group') DEFAULT 'direct',
     created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     last_message_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS participants (
     conversation_id CHAR(36) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS participants (
     PRIMARY KEY (conversation_id, user_id),
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS messages (
     id CHAR(36) PRIMARY KEY,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     FOREIGN KEY (sender_id) REFERENCES profiles(id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at);
 CREATE INDEX idx_messages_created ON messages(created_at);
