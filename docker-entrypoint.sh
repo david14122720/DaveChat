@@ -17,9 +17,18 @@ fi
 mkdir -p /run/mysqld
 chown "$MARIADB_USER" /run/mysqld
 
-# Start MariaDB in background (explicit TCP port — Alpine defaults to port 0)
+# Override Alpine's default config that sets port=0 / skip-networking
+mkdir -p /etc/my.cnf.d
+cat > /etc/my.cnf.d/davechat.cnf <<EOF
+[mariadbd]
+port=3306
+bind-address=127.0.0.1
+skip-networking=0
+EOF
+
+# Start MariaDB in background
 echo "→ Starting MariaDB..."
-mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" --port=3306 --bind-address=127.0.0.1 &
+mariadbd --user="$MARIADB_USER" --datadir="$MARIADB_DATADIR" &
 MARIADB_PID=$!
 
 # Wait for MariaDB to be ready (busybox-compatible loop)
