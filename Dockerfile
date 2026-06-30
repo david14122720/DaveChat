@@ -16,8 +16,14 @@ RUN go build -o /app/davechat ./cmd/main.go
 
 # Runtime
 FROM alpine:3.20
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata mariadb mariadb-client
+
 WORKDIR /app
 COPY --from=backend /app/davechat .
-EXPOSE 8080
+COPY infra/ ./infra/
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+EXPOSE 8086
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["./davechat"]
