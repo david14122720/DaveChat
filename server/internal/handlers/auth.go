@@ -37,35 +37,61 @@ type authResponse struct {
 }
 
 type userResponse struct {
-	ID        string  `json:"id"`
-	Username  string  `json:"username"`
-	Email     string  `json:"email"`
-	AvatarURL *string `json:"avatar_url,omitempty"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
 }
 
+type ErrorResponse struct {
+	Error ErrorBody `json:"error"`
+}
+
+type ErrorBody struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type refreshTokenInput struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshTokenResponse struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// Register handles user registration
 func (h *AuthHandler) Register(c echo.Context) error {
 	var req registerRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid request body"},
 		})
 	}
 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "username, email, and password are required"},
-		})
-	}
-
-	if !isValidEmail(req.Email) {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid email format"},
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "MISSING_FIELDS", Message: "Username, email, and password are required"},
 		})
 	}
 
 	if len(req.Password) < 6 {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Password must be at least 6 characters"},
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "WEAK_PASSWORD", Message: "Password must be at least 6 characters"},
+		})
+	}
+
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(req.Email) {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_EMAIL", Message: "Invalid email format"},
+		})
+	}
+
+	if len(req.Username) < 3 || len(req.Username) > 50 {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_USERNAME", Message: "Username must be between 3 and 50 characters"},
 		})
 	}
 
@@ -99,7 +125,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to create user"},
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to create user: " + err.Error()},
 		})
 	}
 
@@ -109,6 +135,8 @@ func (h *AuthHandler) Register(c echo.Context) error {
 			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to generate token"},
 		})
 	}
+
+	h.DB.Exec("UPDATE profiles SET last_seen = NOW(3) WHERE id = ?", id)
 
 	return c.JSON(http.StatusCreated, authResponse{
 		Token: token,
@@ -120,32 +148,32 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	})
 }
 
+// Login handles user login
 func (h *AuthHandler) Login(c echo.Context) error {
 	var req loginRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid request body"},
 		})
 	}
 
 	if req.Email == "" || req.Password == "" {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "email and password are required"},
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "MISSING_FIELDS", Message: "Email and password are required"},
 		})
 	}
 
-	var user struct {
+	var profile struct {
 		ID           string
 		Username     string
 		Email        string
 		PasswordHash string
-		AvatarURL    *string
 	}
 
 	err := h.DB.QueryRow(
-		"SELECT id, username, email, password_hash, avatar_url FROM profiles WHERE email = ?",
+		"SELECT id, username, email, password_hash FROM profiles WHERE email = ?",
 		req.Email,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.AvatarURL)
+	).Scan(&profile.ID, &profile.Username, &profile.Email, &profile.PasswordHash)
 
 	if err == sql.ErrNoRows {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{
@@ -154,53 +182,75 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Database error"},
+			Error: ErrorBody{Code: "INTERNAL", Message: "Error al buscar usuario"},
 		})
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	err = bcrypt.CompareHashAndPassword([]byte(profile.PasswordHash), []byte(req.Password))
+	if err != nil {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error: ErrorBody{Code: "INVALID_CREDENTIALS", Message: "Invalid email or password"},
 		})
 	}
 
-	h.DB.Exec("UPDATE profiles SET last_seen = NOW(3) WHERE id = ?", user.ID)
-
-	token, err := generateJWT(user.ID, h.Config.JWTSecret)
+	token, err := generateJWT(profile.ID, h.Config.JWTSecret)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to generate token"},
 		})
 	}
 
+	h.DB.Exec("UPDATE profiles SET status = 'online', last_seen = NOW(3) WHERE id = ?", profile.ID)
+
 	return c.JSON(http.StatusOK, authResponse{
 		Token: token,
 		User: userResponse{
-			ID:        user.ID,
-			Username:  user.Username,
-			Email:     user.Email,
-			AvatarURL: user.AvatarURL,
+			ID:       profile.ID,
+			Username: profile.Username,
+			Email:    profile.Email,
 		},
 	})
 }
 
-func (h *AuthHandler) Me(c echo.Context) error {
-	userID, ok := c.Get("user_id").(string)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorBody{Code: "UNAUTHORIZED", Message: "Missing user ID in context"},
+type refreshTokenInput struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshTokenResponse struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (h *AuthHandler) RefreshToken(c echo.Context) error {
+	var req refreshTokenInput
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid request body"},
+		})
+	}
+	if req.RefreshToken == "" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "MISSING_FIELDS", Message: "Refresh token is required"},
 		})
 	}
 
-	var user userResponse
-	var avatar *string
+	hashedToken := sha256.Sum256([]byte(req.RefreshToken))
+	tokenHash := fmt.Sprintf("%x", hashedToken)
+
+	var storedToken struct {
+		ID        string
+		UserID    string
+		ExpiresAt time.Time
+	}
+
 	err := h.DB.QueryRow(
-		"SELECT id, username, email, avatar_url FROM profiles WHERE id = ?", userID,
-	).Scan(&user.ID, &user.Username, &user.Email, &avatar)
+		"SELECT id, user_id, expires_at FROM refresh_tokens WHERE token_hash = ?",
+		tokenHash,
+	).Scan(&storedToken.ID, &storedToken.UserID, &storedToken.ExpiresAt)
 
 	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorBody{Code: "NOT_FOUND", Message: "User not found"},
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_TOKEN", Message: "Invalid or expired refresh token"},
 		})
 	}
 	if err != nil {
@@ -209,8 +259,56 @@ func (h *AuthHandler) Me(c echo.Context) error {
 		})
 	}
 
-	user.AvatarURL = avatar
-	return c.JSON(http.StatusOK, user)
+	if time.Now().After(storedToken.ExpiresAt) {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error: ErrorBody{Code: "EXPIRED_TOKEN", Message: "Refresh token has expired"},
+		})
+	}
+
+	// Delete old token
+	_, _ = h.DB.Exec("DELETE FROM refresh_tokens WHERE id = ?", storedToken.ID)
+
+	// Generate new tokens
+	token, err := generateJWT(storedToken.UserID, h.Config.JWTSecret)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to generate token"},
+		})
+	}
+
+	newRefresh, err := generateRefreshToken()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to generate refresh token"},
+		})
+	}
+
+	newHash := sha256.Sum256([]byte(newRefresh))
+	_, err = h.DB.Exec(
+		"INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+		newUUID(), storedToken.UserID, fmt.Sprintf("%x", newHash), time.Now().Add(7*24*time.Hour),
+	)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to store refresh token"},
+		})
+	}
+
+	return c.JSON(http.StatusOK, refreshTokenResponse{
+		Token:        token,
+		RefreshToken: newRefresh,
+	})
+}
+
+func generateJWT(userID, secret string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
 }
 
 func newUUID() string {
@@ -229,106 +327,11 @@ func formatUUID(b []byte) string {
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
-type refreshResponse struct {
-	Token        string       `json:"token"`
-	RefreshToken string       `json:"refresh_token"`
-	User         userResponse `json:"user"`
-}
-
-func (h *AuthHandler) Refresh(c echo.Context) error {
-	var req refreshRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid request body"},
-		})
-	}
-
-	if req.RefreshToken == "" {
-		return c.JSON(http.StatusUnprocessableEntity, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_INPUT", Message: "refresh_token is required"},
-		})
-	}
-
-	tokenHash := sha256Hex(req.RefreshToken)
-
-	var storedID, userID, expiresAt string
-	err := h.DB.QueryRow(
-		"SELECT id, user_id, expires_at FROM refresh_tokens WHERE token_hash = ?", tokenHash,
-	).Scan(&storedID, &userID, &expiresAt)
-	if err == sql.ErrNoRows {
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_TOKEN", Message: "Invalid refresh token"},
-		})
-	}
+func generateRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Database error"},
-		})
+		return "", fmt.Errorf("failed to generate refresh token: %w", err)
 	}
-
-	expTime, _ := time.Parse("2006-01-02 15:04:05", expiresAt)
-	if time.Now().After(expTime) {
-		h.DB.Exec("DELETE FROM refresh_tokens WHERE id = ?", storedID)
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error: ErrorBody{Code: "TOKEN_EXPIRED", Message: "Refresh token expired, please login again"},
-		})
-	}
-
-	h.DB.Exec("DELETE FROM refresh_tokens WHERE id = ?", storedID)
-
-	var user userResponse
-	var avatar *string
-	err = h.DB.QueryRow(
-		"SELECT id, username, email, avatar_url FROM profiles WHERE id = ?", userID,
-	).Scan(&user.ID, &user.Username, &user.Email, &avatar)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: ErrorBody{Code: "NOT_FOUND", Message: "User not found"},
-		})
-	}
-	user.AvatarURL = avatar
-
-	accessToken, err := generateJWT(userID, h.Config.JWTSecret)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to generate token"},
-		})
-	}
-
-	newRefreshToken := newUUID()
-	newHash := sha256Hex(newRefreshToken)
-	h.DB.Exec(
-		"INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
-		newUUID(), userID, newHash, time.Now().Add(30*24*time.Hour),
-	)
-
-	return c.JSON(http.StatusOK, refreshResponse{
-		Token:        accessToken,
-		RefreshToken: newRefreshToken,
-		User:         user,
-	})
-}
-
-func sha256Hex(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return fmt.Sprintf("%x", h)
-}
-
-func generateJWT(userID, secret string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub": userID,
-		"iat": time.Now().Unix(),
-		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
-}
-
-func isValidEmail(email string) bool {
-	re := regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$`)
-	return re.MatchString(email)
+	return fmt.Sprintf("%x", b), nil
 }
