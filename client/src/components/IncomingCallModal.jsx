@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phone, PhoneOff, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useCall } from '../contexts/CallContext';
@@ -9,7 +9,6 @@ export default function IncomingCallModal() {
   const call = useCall();
   const { peerId, callType, acceptCall, rejectCall } = call;
   const [countdown, setCountdown] = useState(TIMEOUT_SECONDS);
-  const ringIntervalRef = useRef(null);
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -21,36 +20,6 @@ export default function IncomingCallModal() {
     }, 1000);
     return () => clearInterval(timer);
   }, [countdown, rejectCall]);
-
-  useEffect(() => {
-    const playBeep = () => {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 440;
-        gain.gain.value = 0.3;
-        osc.start();
-        setTimeout(() => {
-          osc.stop();
-          ctx.close();
-        }, 500);
-      } catch (e) {
-      }
-    };
-
-    playBeep();
-    ringIntervalRef.current = setInterval(playBeep, 3000);
-
-    return () => {
-      if (ringIntervalRef.current) {
-        clearInterval(ringIntervalRef.current);
-        ringIntervalRef.current = null;
-      }
-    };
-  }, []);
 
   const progress = ((TIMEOUT_SECONDS - countdown) / TIMEOUT_SECONDS) * 100;
 
