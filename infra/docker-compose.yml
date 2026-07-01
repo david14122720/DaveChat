@@ -1,24 +1,4 @@
-
 services:
-  mariadb:
-    image: mariadb:11.4
-    container_name: davechat-db
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: davechat
-      MYSQL_USER: davechat
-      MYSQL_PASSWORD: davechat_pass
-    ports:
-      - "3307:3306"
-    volumes:
-      - mariadb_data:/var/lib/mysql
-      - ./mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   api:
     build:
       context: ..
@@ -28,12 +8,6 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      DB_DSN: "davechat:davechat_pass@tcp(mariadb:3306)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"
+      DB_DSN: "davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"
       JWT_SECRET: "change-me-in-production"
       ALLOWED_ORIGINS: "*"
-    depends_on:
-      mariadb:
-        condition: service_healthy
-
-volumes:
-  mariadb_data:
