@@ -125,7 +125,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to create user: " + err.Error()},
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to create user"},
 		})
 	}
 
@@ -210,15 +210,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			Email:    profile.Email,
 		},
 	})
-}
-
-type refreshTokenInput struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
-type refreshTokenResponse struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *AuthHandler) RefreshToken(c echo.Context) error {
