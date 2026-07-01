@@ -1,6 +1,6 @@
 # DaveChat — Base de Datos MariaDB
 
-Este documento define el esquema de base de datos para DaveChat, que corre en MariaDB 11.4 vía Docker.
+Este documento define el esquema de base de datos para DaveChat, que corre en MariaDB 11 en Dokploy (`192.168.101.133:3307`).
 
 ## Esquema
 
@@ -87,7 +87,17 @@ CREATE FULLTEXT INDEX ft_messages_content ON messages(content);
 
 ## Esquema de Inicialización
 
-El esquema se inicializa automáticamente via Docker. Ver `infra/mariadb/init.sql` para el DDL completo y `infra/docker-compose.yml` para la configuración del contenedor.
+El esquema se inicializa vía Dokploy al crear la base de datos (ejecutando `infra/mariadb/init.sql` manualmente contra la DB remota). Ver `dokploy.md` para el procedimiento completo.
+
+## Conexión
+
+| Campo | Valor |
+|-------|-------|
+| **Host** | `192.168.101.133` |
+| **Puerto** | `3307` |
+| **Base** | `davechat` |
+| **Usuario** | `davechat` |
+| **Password** | `davechat_pass` |
 
 ## Diferencias con Supabase/PostgreSQL
 

@@ -9,7 +9,7 @@
 
 El sistema utiliza un enfoque híbrido para la comunicación:
 - **Backend:** Servidor Go (API REST + WebSocket signaling).
-- **Base de Datos:** MariaDB 11.4 en Docker para persistencia.
+- **Base de Datos:** MariaDB 11 en Dokploy para persistencia (`192.168.101.133:3307`).
 - **Autenticación:** bcrypt + JWT (custom, sin dependencias externas).
 - **Mensajería:** Polling HTTP cada 2s para consultar nuevos mensajes.
 - **Señalización WebRTC:** Servidor Go vía WebSockets (gorilla/websocket) para intercambio de metadatos de medios.
@@ -69,9 +69,8 @@ DaveChat/
 │   │   ├── middleware/   # JWT auth middleware
 │   │   ├── signaling/   # (para futura expansión)
 │   │   └── websocket/   # Hub + WebSocket handler
-├── infra/               # Infraestructura Docker
+├── infra/               # Infraestructura
 │   ├── mariadb/         # init.sql
-│   ├── coturn/          # TURN server config
 │   └── docker-compose.yml
 ```
 
@@ -136,7 +135,7 @@ El servidor en Go actuará como un "relay" de mensajes de señalización. Los ev
 
 ### Fase 1: Cimientos (Go Server + MariaDB + Auth)
 - Configurar servidor Go con router (Chi/Gin), middlewares, handlers.
-- Inicializar MariaDB en Docker con `infra/mariadb/init.sql`.
+- Base de datos MariaDB en Dokploy (ver `dokploy.md`).
 - Implementar registro y login con bcrypt + JWT.
 - Crear UI base en React (AuthLayout, ChatWindow, MainLayout).
 

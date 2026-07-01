@@ -50,41 +50,30 @@ Sistema de mensajería en tiempo real con soporte de llamadas de audio/video ví
 ## Desarrollo local
 
 ```bash
-# 1. Iniciar MariaDB (Docker)
-docker run -d --name davechat-db \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=davechat \
-  -e MYSQL_USER=davechat \
-  -e MYSQL_PASSWORD=davechat_pass \
-  -p 3306:3306 mariadb:11
-
-# 2. Inicializar schema (si no se monta automáticamente)
-mysql -h 127.0.0.1 -u root -p davechat < infra/mariadb/init.sql
-
-# 3. Frontend (terminal 1)
+# 1. Frontend (terminal 1)
 cd client
 npm install
 npm run dev
 
-# 4. Backend (terminal 2)
+# 2. Backend (terminal 2)
 export JWT_SECRET=tu-secreto-aqui
 export DEV_MODE=true       # Habilita CORS para localhost:5173
 cd server && go run ./cmd/main.go
 ```
 
-## Despliegue con Docker
+> La base de datos MariaDB corre en Dokploy (`192.168.101.133:3307`). Ver `dokploy.md` para más detalles.
+
+## Despliegue
+
+El deploy se hace vía **Dokploy** (ver `dokploy.md`).
+
+### Local con Docker Compose
 
 ```bash
-# Build multi-stage
-docker build -t davechat:latest .
-
-# Run
-docker run -d --name davechat \
-  -p 8080:8080 \
-  -e JWT_SECRET=tu-secreto-aqui \
-  -e DB_DSN="davechat:davechat_pass@tcp(host.docker.internal:3306)/davechat?parseTime=true&charset=utf8mb4&loc=UTC" \
-  davechat:latest
+docker compose -f infra/docker-compose.yml up -d --build
 ```
+
+> La base de datos corre en Dokploy, no se necesita levantar MariaDB local.
 
 ## Variables de entorno
 
@@ -92,7 +81,7 @@ docker run -d --name davechat \
 |----------|------------|---------|
 | `JWT_SECRET` | Secreto para firmar JWT (requerido) | — |
 | `PORT` | Puerto del servidor | `8080` |
-| `DB_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(localhost:3306)/davechat?parseTime=true&...` |
+| `DB_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&...` |
 | `ALLOWED_ORIGINS` | Orígenes permitidos para CORS | `http://localhost:5173` |
 | `DEV_MODE` | Modo desarrollo (true = CORS habilitado, sin embed) | `false` |
 

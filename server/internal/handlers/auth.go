@@ -43,15 +43,6 @@ type userResponse struct {
 	Avatar   string `json:"avatar"`
 }
 
-type ErrorResponse struct {
-	Error ErrorBody `json:"error"`
-}
-
-type ErrorBody struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
 type refreshTokenInput struct {
 	RefreshToken string `json:"refresh_token"`
 }
@@ -61,7 +52,36 @@ type refreshTokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// Register handles user registration
+// Me returns the authenticated user's profile
+func (h *AuthHandler) Me(c echo.Context) error {
+	userID := c.Get("user_id").(string)
+
+	var profile struct {
+		ID       string
+		Username string
+		Email    string
+		Avatar   string
+		Status   string
+		LastSeen time.Time
+	}
+	err := h.DB.QueryRow(
+		"SELECT id, username, email, COALESCE(avatar_url,''), status, last_seen FROM profiles WHERE id = ?",
+		userID,
+	).Scan(&profile.ID, &profile.Username, &profile.Email, &profile.Avatar, &profile.Status, &profile.LastSeen)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, ErrorResponse{
+			Error: ErrorBody{Code: "NOT_FOUND", Message: "User not found"},
+		})
+	}
+
+	return c.JSON(http.StatusOK, userResponse{
+		ID:       profile.ID,
+		Username: profile.Username,
+		Email:    profile.Email,
+		Avatar:   profile.Avatar,
+	})
+}
+
 func (h *AuthHandler) Register(c echo.Context) error {
 	var req registerRequest
 	if err := c.Bind(&req); err != nil {
