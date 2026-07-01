@@ -60,7 +60,7 @@ func AuthMiddleware(jwtSecret string) echo.MiddlewareFunc {
 				})
 			}
 
-			userID, ok := claims["sub"].(string)
+			userID, ok := claims["user_id"].(string)
 			if !ok {
 				return c.JSON(http.StatusUnauthorized, errorResponse{
 					Error: errorBody{Code: "INVALID_TOKEN", Message: "Missing user_id in token"},
