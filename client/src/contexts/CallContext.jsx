@@ -58,6 +58,8 @@ export function CallProvider({ children }) {
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
+  const ringtoneCtxRef = useRef(null);
+  const ringtoneIntervalRef = useRef(null);
 
   const [audioDevices, setAudioDevices] = useState([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState('');
@@ -103,10 +105,62 @@ export function CallProvider({ children }) {
     dispatch({ type: 'SET_REMOTE_STREAM', stream: null });
   }, [dispatch]);
 
+  const startRingtone = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ringtoneCtxRef.current = ctx;
+
+      const playRing = () => {
+        if (!ringtoneCtxRef.current) return;
+        const c = ringtoneCtxRef.current;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, c.currentTime);
+        osc.frequency.setValueAtTime(480, c.currentTime + 0.3);
+        osc.frequency.setValueAtTime(440, c.currentTime + 0.6);
+        gain.gain.setValueAtTime(0, c.currentTime);
+        gain.gain.linearRampToValueAtTime(0.3, c.currentTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0.3, c.currentTime + 1.2);
+        gain.gain.linearRampToValueAtTime(0, c.currentTime + 1.8);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(c.currentTime);
+        osc.stop(c.currentTime + 2);
+      };
+
+      playRing();
+      ringtoneIntervalRef.current = setInterval(playRing, 4000);
+    } catch (e) {
+      console.warn('🔇 No se pudo reproducir ringtone:', e);
+    }
+  }, []);
+
+  const stopRingtone = useCallback(() => {
+    if (ringtoneIntervalRef.current) {
+      clearInterval(ringtoneIntervalRef.current);
+      ringtoneIntervalRef.current = null;
+    }
+    if (ringtoneCtxRef.current) {
+      ringtoneCtxRef.current.close().catch(() => {});
+      ringtoneCtxRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.callState === CallState.RINGING) {
+      startRingtone();
+    } else {
+      stopRingtone();
+    }
+    return stopRingtone;
+  }, [state.callState, startRingtone, stopRingtone]);
+
   const createPeerConnection = useCallback(async (remoteUserId, callType = 'audio') => {
     const pc = new RTCPeerConnection(getIceConfig());
     pcRef.current = pc;
 
+    let stream;
     try {
       const audioConstraints = {
         echoCancellation: true,
@@ -116,28 +170,55 @@ export function CallProvider({ children }) {
       if (selectedAudioDevice) {
         audioConstraints.deviceId = { exact: selectedAudioDevice };
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints,
         video: callType === 'video',
       });
-      localStreamRef.current = stream;
-      dispatch({ type: 'SET_LOCAL_STREAM', stream });
-
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
     } catch (err) {
-      console.error('Error al acceder al micrófono:', err);
-      if (err.name === 'NotAllowedError') {
-        throw new Error('Permiso de micrófono denegado');
-      } else if (err.name === 'NotFoundError') {
-        throw new Error('No se encontró ningún micrófono');
-      } else if (err.name === 'AbortError') {
-        throw new Error('Error al acceder al dispositivo de audio');
+      if (callType === 'video') {
+        console.warn('⚠️ No se pudo acceder a la cámara, continuando solo con audio:', err.message);
+        try {
+          const audioConstraints = {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          };
+          if (selectedAudioDevice) {
+            audioConstraints.deviceId = { exact: selectedAudioDevice };
+          }
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraints,
+            video: false,
+          });
+        } catch (audioErr) {
+          console.error('Error al acceder al micrófono:', audioErr);
+          if (audioErr.name === 'NotAllowedError') {
+            throw new Error('Permiso de micrófono denegado');
+          } else if (audioErr.name === 'NotFoundError') {
+            throw new Error('No se encontró ningún micrófono');
+          } else {
+            throw new Error('Error de medios: ' + audioErr.message);
+          }
+        }
       } else {
-        throw new Error('Error de medios: ' + err.message);
+        console.error('Error al acceder al micrófono:', err);
+        if (err.name === 'NotAllowedError') {
+          throw new Error('Permiso de micrófono denegado');
+        } else if (err.name === 'NotFoundError') {
+          throw new Error('No se encontró ningún micrófono');
+        } else if (err.name === 'AbortError') {
+          throw new Error('Error al acceder al dispositivo de audio');
+        } else {
+          throw new Error('Error de medios: ' + err.message);
+        }
       }
     }
+
+    localStreamRef.current = stream;
+    dispatch({ type: 'SET_LOCAL_STREAM', stream });
+    stream.getTracks().forEach(track => {
+      pc.addTrack(track, stream);
+    });
 
     pc.ontrack = (event) => {
       console.log('📡 Track remoto recibido');
