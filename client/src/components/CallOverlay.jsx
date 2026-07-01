@@ -16,13 +16,14 @@ const AUTO_HIDE_STATES = ['rejected', 'busy', 'timeout', 'ended'];
 
 export default function CallOverlay() {
   const call = useCall();
-  const { callState, peerId, localStream, remoteStream, endCall, resetCall } = call;
+  const { callState, peerId, localStream, remoteStream, callType, endCall, resetCall, audioDevices, selectedAudioDevice, setSelectedAudioDevice } = call;
 
   const remoteVideoRef = useRef(null);
   const localVideoRef = useRef(null);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef(null);
   const [micEnabled, setMicEnabled] = useState(true);
+  const [videoEnabled, setVideoEnabled] = useState(true);
 
   const isVisible = callState !== 'idle' && callState !== 'ringing';
 
@@ -76,6 +77,18 @@ export default function CallOverlay() {
       }
     }
   };
+
+  const toggleVideo = () => {
+    if (localStream) {
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setVideoEnabled(videoTrack.enabled);
+      }
+    }
+  };
+
+  const [showMicPicker, setShowMicPicker] = useState(false);
 
   if (!isVisible) return null;
 
@@ -158,32 +171,67 @@ export default function CallOverlay() {
           transition={{ delay: 0.15, duration: 0.3 }}
           className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center gap-6 pb-10 pt-6 bg-gradient-to-t from-black/50 to-transparent"
         >
-          <button
-            onClick={toggleMic}
-            className={'w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 ' +
-              (micEnabled
-                ? 'bg-slate-700 hover:bg-slate-600 text-white'
-                : 'bg-red-600/80 hover:bg-red-600 text-white')
-            }
-            title={micEnabled ? 'Silenciar micrófono' : 'Activar micrófono'}
-          >
-            {micEnabled ? <Mic className="w-7 h-7" /> : <MicOff className="w-7 h-7" />}
-          </button>
+          <div className="relative">
+            <button
+              onClick={toggleMic}
+              className={'w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 ' +
+                (micEnabled
+                  ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                  : 'bg-red-600/80 hover:bg-red-600 text-white')
+              }
+              title={micEnabled ? 'Silenciar micrófono' : 'Activar micrófono'}
+            >
+              {micEnabled ? <Mic className="w-6 h-6 md:w-7 md:h-7" /> : <MicOff className="w-6 h-6 md:w-7 md:h-7" />}
+            </button>
+            {audioDevices.length > 1 && (
+              <button
+                onClick={() => setShowMicPicker(!showMicPicker)}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-slate-600 rounded-full flex items-center justify-center text-[10px] text-white hover:bg-slate-500 transition-colors"
+                title="Cambiar micrófono"
+              >
+                ⚙
+              </button>
+            )}
+            {showMicPicker && audioDevices.length > 1 && (
+              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl w-64 z-50">
+                <p className="text-xs text-slate-400 font-medium mb-2">Micrófono</p>
+                {audioDevices.map(d => (
+                  <button
+                    key={d.deviceId}
+                    onClick={() => { setSelectedAudioDevice(d.deviceId); setShowMicPicker(false); }}
+                    className={'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ' +
+                      (selectedAudioDevice === d.deviceId
+                        ? 'bg-brand/20 text-brand-light'
+                        : 'text-slate-300 hover:bg-slate-800')
+                    }
+                  >
+                    {d.label || `Micrófono ${d.deviceId.slice(0, 8)}...`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          <button
-            disabled
-            className="w-16 h-16 rounded-full flex items-center justify-center bg-slate-800/50 text-slate-500 cursor-not-allowed shadow-xl"
-            title="Video no disponible aún"
-          >
-            <Video className="w-7 h-7" />
-          </button>
+          {callType === 'video' && (
+            <button
+              onClick={toggleVideo}
+              className={'w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 ' +
+                (videoEnabled
+                  ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                  : 'bg-red-600/80 hover:bg-red-600 text-white')
+              }
+              title={videoEnabled ? 'Desactivar video' : 'Activar video'}
+            >
+              <Video className="w-6 h-6 md:w-7 md:h-7" />
+            </button>
+          )}
 
           <button
             onClick={endCall}
-            className="w-16 h-16 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-500 text-white shadow-xl transition-all active:scale-95 hover:scale-110"
+            className="w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-500 text-white shadow-xl transition-all active:scale-95 hover:scale-110"
             title="Colgar llamada"
           >
-            <PhoneOff className="w-7 h-7" />
+            <PhoneOff className="w-6 h-6 md:w-7 md:h-7" />
           </button>
         </motion.div>
       </motion.div>
