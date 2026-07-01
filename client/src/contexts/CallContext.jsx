@@ -251,7 +251,7 @@ export function CallProvider({ children }) {
       await pc.setLocalDescription(offer);
 
       console.log('📤 Enviando offer SDP');
-      wsClient.send('call-offer', { sdp: offer }, targetUserId);
+      wsClient.send('call-offer', { sdp: offer }, targetUserId, { call_type: callType });
     } catch (err) {
       console.error('Error al iniciar llamada:', err);
       cleanupCall();
