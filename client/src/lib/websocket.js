@@ -53,12 +53,12 @@ class WebSocketClient {
     setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
   }
 
-  send(type, payload = {}, target = '') {
+  send(type, payload = {}, target = '', extra = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn('⚠️ WS no conectado');
       return;
     }
-    const msg = { type, payload, target };
+    const msg = { type, payload, target, ...extra };
     console.log('📤 WS envía:', msg);
     this.ws.send(JSON.stringify(msg));
   }
