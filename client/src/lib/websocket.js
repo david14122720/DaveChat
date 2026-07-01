@@ -22,7 +22,6 @@ class WebSocketClient {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
-      console.log('✅ WebSocket conectado');
       this.reconnectAttempts = 0;
       this._flushPending();
     };
@@ -30,7 +29,6 @@ class WebSocketClient {
     this.ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        console.log('📩 WS recibe:', msg);
         this._emit(msg.type, msg);
       } catch (e) {
         console.error('WS parse error:', e);
@@ -38,7 +36,6 @@ class WebSocketClient {
     };
 
     this.ws.onclose = () => {
-      console.log('❌ WebSocket desconectado');
       this._emit('close', {});
       this._reconnect();
     };
@@ -51,8 +48,9 @@ class WebSocketClient {
   _reconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
     this.reconnectAttempts++;
-    console.log('🔄 Reintentando conexión WS (' + this.reconnectAttempts + '/' + this.maxReconnectAttempts + ')...');
-    setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
+    const jitter = Math.random() * 1000;
+    setTimeout(() => this.connect(), delay + jitter);
   }
 
   _flushPending() {
@@ -71,7 +69,6 @@ class WebSocketClient {
   send(type, payload = {}, target = '', extra = {}) {
     const msg = { type, payload, target, ...extra };
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('📤 WS envía:', msg);
       this.ws.send(JSON.stringify(msg));
       return;
     }

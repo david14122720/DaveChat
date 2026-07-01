@@ -60,10 +60,18 @@ CREATE TABLE IF NOT EXISTS call_logs (
 );
 CREATE INDEX idx_call_logs_caller ON call_logs(caller_id);
 CREATE INDEX idx_call_logs_callee ON call_logs(callee_id);
+CREATE INDEX idx_call_logs_caller_started ON call_logs(caller_id, started_at);
 ```
+(Previously: DDL had only `idx_caller` and `idx_callee` single-column indexes)
 
 #### Scenario: Schema applies idempotently
 
 - GIVEN `call_logs` table already exists
 - WHEN the init SQL runs again
 - THEN no error occurs (IF NOT EXISTS)
+
+#### Scenario: Composite index covers ORDER BY query
+
+- GIVEN the new schema has been applied
+- WHEN a query runs `SELECT ... FROM call_logs WHERE caller_id = ? ORDER BY started_at DESC`
+- THEN `EXPLAIN` shows `Using index` without `Using filesort`

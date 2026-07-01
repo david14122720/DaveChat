@@ -15,6 +15,7 @@ type Client struct {
 	Send   chan []byte
 	Hub    *Hub
 	Conn   interface{}
+	Rooms  map[string]bool
 }
 
 type Hub struct {
@@ -26,7 +27,8 @@ type Hub struct {
 	CallTimeouts   map[string]*time.Timer
 	callPeers      map[string]string
 	callStartTimes map[string]time.Time
-	callTypes      map[string]string
+	callTypes          map[string]string
+	lastPresenceTouch  map[string]time.Time
 }
 
 func NewHub(db *sql.DB) *Hub {
@@ -38,7 +40,8 @@ func NewHub(db *sql.DB) *Hub {
 		CallTimeouts:   make(map[string]*time.Timer),
 		callPeers:      make(map[string]string),
 		callStartTimes: make(map[string]time.Time),
-		callTypes:      make(map[string]string),
+		callTypes:         make(map[string]string),
+		lastPresenceTouch: make(map[string]time.Time),
 	}
 }
 
@@ -64,9 +67,10 @@ func (h *Hub) Unregister(client *Client) {
 	if existing, ok := h.clients[client.UserID]; ok && existing == client {
 		delete(h.clients, client.UserID)
 		h.setPresence(client.UserID, "offline")
+		delete(h.lastPresenceTouch, client.UserID)
 	}
-	for roomID, members := range h.rooms {
-		if _, ok := members[client.UserID]; ok {
+	for roomID := range client.Rooms {
+		if members, ok := h.rooms[roomID]; ok {
 			delete(members, client.UserID)
 			if len(members) == 0 {
 				delete(h.rooms, roomID)
@@ -139,12 +143,18 @@ func (h *Hub) setPresence(userID, status string) {
 }
 
 func (h *Hub) TouchPresence(userID string) {
-	h.mu.RLock()
+	h.mu.Lock()
 	_, online := h.clients[userID]
-	h.mu.RUnlock()
 	if !online {
+		h.mu.Unlock()
 		return
 	}
+	if last, ok := h.lastPresenceTouch[userID]; ok && time.Since(last) < 30*time.Second {
+		h.mu.Unlock()
+		return
+	}
+	h.lastPresenceTouch[userID] = time.Now()
+	h.mu.Unlock()
 	h.setPresence(userID, "online")
 }
 
@@ -165,6 +175,7 @@ func (h *Hub) JoinRoom(roomID, userID string) {
 	}
 	if client, ok := h.clients[userID]; ok {
 		h.rooms[roomID][userID] = client
+		client.Rooms[roomID] = true
 	}
 }
 
@@ -176,6 +187,9 @@ func (h *Hub) LeaveRoom(roomID, userID string) {
 		if len(members) == 0 {
 			delete(h.rooms, roomID)
 		}
+	}
+	if client, ok := h.clients[userID]; ok {
+		delete(client.Rooms, roomID)
 	}
 }
 

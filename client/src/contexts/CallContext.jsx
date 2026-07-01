@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { wsClient } from '../lib/websocket';
 
 const CallState = {
@@ -161,15 +161,15 @@ export function CallProvider({ children }) {
     pcRef.current = pc;
 
     let stream;
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+    if (selectedAudioDevice) {
+      audioConstraints.deviceId = { exact: selectedAudioDevice };
+    }
     try {
-      const audioConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      };
-      if (selectedAudioDevice) {
-        audioConstraints.deviceId = { exact: selectedAudioDevice };
-      }
       stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints,
         video: callType === 'video',
@@ -178,14 +178,6 @@ export function CallProvider({ children }) {
       if (callType === 'video') {
         console.warn('⚠️ No se pudo acceder a la cámara, continuando solo con audio:', err.message);
         try {
-          const audioConstraints = {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          };
-          if (selectedAudioDevice) {
-            audioConstraints.deviceId = { exact: selectedAudioDevice };
-          }
           stream = await navigator.mediaDevices.getUserMedia({
             audio: audioConstraints,
             video: false,
@@ -221,29 +213,24 @@ export function CallProvider({ children }) {
     });
 
     pc.ontrack = (event) => {
-      console.log('📡 Track remoto recibido');
       remoteStreamRef.current = event.streams[0];
       dispatch({ type: 'SET_REMOTE_STREAM', stream: event.streams[0] });
     };
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('🧊 Enviando ICE candidate');
         wsClient.send('ice-candidate', { candidate: event.candidate.toJSON() }, remoteUserId);
       }
     };
 
     pc.onconnectionstatechange = () => {
-      console.log('🔗 Conexión WebRTC state:', pc.connectionState);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        console.log('❌ Conexión WebRTC perdida');
         cleanupCall();
         dispatch({ type: 'SET_ERROR', error: 'Conexión perdida' });
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log('🧊 ICE state:', pc.iceConnectionState);
     };
 
     return pc;
@@ -255,24 +242,20 @@ export function CallProvider({ children }) {
     const unsubscribes = [];
 
     unsubscribes.push(wsClient.on('call-offer', (msg) => {
-      console.log('📞 LLAMADA ENTRANTE de', msg.from, msg.call_type);
       dispatch({ type: 'SET_RINGING', from: msg.from, callType: msg.call_type, sdp: msg.payload?.sdp });
     }));
 
     unsubscribes.push(wsClient.on('call-answer', (msg) => {
-      console.log('📞 LLAMADA ACEPTADA por', msg.from);
       const pc = pcRef.current;
       if (pc && msg.payload?.sdp) {
         const remoteAnswer = new RTCSessionDescription(msg.payload.sdp);
         pc.setRemoteDescription(remoteAnswer)
-          .then(() => console.log('✅ Remote description set'))
           .catch(err => console.error('Error setting remote description:', err));
       }
       dispatch({ type: 'SET_CONNECTED' });
     }));
 
     unsubscribes.push(wsClient.on('ice-candidate', (msg) => {
-      console.log('🧊 ICE candidate recibido de', msg.from);
       const pc = pcRef.current;
       if (pc && msg.payload?.candidate) {
         pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate))
@@ -281,36 +264,31 @@ export function CallProvider({ children }) {
     }));
 
     unsubscribes.push(wsClient.on('call-busy', () => {
-      console.log('📞 DESTINO OCUPADO');
       cleanupCall();
       dispatch({ type: 'SET_BUSY' });
     }));
 
     unsubscribes.push(wsClient.on('call-reject', (msg) => {
-      console.log('📞 LLAMADA RECHAZADA por', msg.from);
       cleanupCall();
       dispatch({ type: 'SET_REJECTED', from: msg.from });
     }));
 
     unsubscribes.push(wsClient.on('call-timeout', () => {
-      console.log('⏰ TIMEOUT — no contestó');
       cleanupCall();
       dispatch({ type: 'SET_TIMEOUT' });
     }));
 
     unsubscribes.push(wsClient.on('call-started', () => {
-      console.log('✅ LLAMADA INICIADA');
     }));
 
     unsubscribes.push(wsClient.on('call-end', (msg) => {
-      console.log('📞 LLAMADA FINALIZADA por', msg.from);
       cleanupCall();
       dispatch({ type: 'SET_ENDED' });
     }));
 
     unsubscribes.push(wsClient.on('close', () => {
       if (state.callState !== CallState.IDLE) {
-        console.log('⚠️ WS desconectado durante llamada');
+        console.warn('⚠️ WS desconectado durante llamada');
         cleanupCall();
         dispatch({ type: 'SET_ERROR', error: 'Conexión perdida' });
       }
@@ -324,14 +302,12 @@ export function CallProvider({ children }) {
 
   const startCall = useCallback(async (targetUserId, callType = 'audio') => {
     try {
-      console.log('📞 Iniciando llamada ' + callType + ' con ' + targetUserId + '...');
       dispatch({ type: 'SET_CALLING', peerId: targetUserId, callType });
 
       const pc = await createPeerConnection(targetUserId, callType);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      console.log('📤 Enviando offer SDP');
       wsClient.send('call-offer', { sdp: offer }, targetUserId, { call_type: callType });
     } catch (err) {
       console.error('Error al iniciar llamada:', err);
@@ -345,8 +321,6 @@ export function CallProvider({ children }) {
     if (!callerId || !state.sdp) return;
 
     try {
-      console.log('📞 Aceptando llamada...');
-
       const pc = await createPeerConnection(callerId, state.callType || 'audio');
 
       const remoteOffer = new RTCSessionDescription(state.sdp);
@@ -355,7 +329,6 @@ export function CallProvider({ children }) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      console.log('📤 Enviando answer SDP');
       wsClient.send('call-answer', { sdp: answer }, callerId);
       dispatch({ type: 'SET_CONNECTED' });
     } catch (err) {
@@ -366,14 +339,12 @@ export function CallProvider({ children }) {
   }, [state.peerId, state.sdp, createPeerConnection, cleanupCall]);
 
   const rejectCall = useCallback(() => {
-    console.log('📞 Rechazando llamada...');
     wsClient.send('call-reject', {}, state.peerId);
     cleanupCall();
     dispatch({ type: 'RESET' });
   }, [state.peerId, cleanupCall]);
 
   const endCall = useCallback(() => {
-    console.log('📞 Colgando llamada...');
     wsClient.send('call-end', {}, state.peerId);
     cleanupCall();
     dispatch({ type: 'RESET' });
@@ -384,7 +355,7 @@ export function CallProvider({ children }) {
     dispatch({ type: 'RESET' });
   }, [cleanupCall]);
 
-  const value = {
+  const value = useMemo(() => ({
     ...state,
     startCall,
     acceptCall,
@@ -398,7 +369,8 @@ export function CallProvider({ children }) {
     isCalling: state.callState === CallState.CALLING,
     isRinging: state.callState === CallState.RINGING,
     isConnected: state.callState === CallState.CONNECTED,
-  };
+  }), [state, startCall, acceptCall, rejectCall, endCall, resetCall,
+      audioDevices, selectedAudioDevice, setSelectedAudioDevice]);
 
   return (
     <CallContext.Provider value={value}>

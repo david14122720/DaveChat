@@ -46,6 +46,7 @@ func HandleWebSocket(hub *Hub, c echo.Context) error {
 		UserID: userID,
 		Send:   make(chan []byte, 256),
 		Hub:    hub,
+		Rooms:  make(map[string]bool),
 	}
 
 	hub.Register(client)

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS call_logs (
     duration_secs INT UNSIGNED DEFAULT 0,
     INDEX idx_caller (caller_id),
     INDEX idx_callee (callee_id),
+    INDEX idx_caller_started (caller_id, started_at),
     FOREIGN KEY (caller_id) REFERENCES profiles(id) ON DELETE CASCADE,
     FOREIGN KEY (callee_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
