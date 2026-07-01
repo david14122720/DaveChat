@@ -81,7 +81,7 @@ docker compose -f infra/docker-compose.yml up -d --build
 |----------|------------|---------|
 | `JWT_SECRET` | Secreto para firmar JWT (requerido) | — |
 | `PORT` | Puerto del servidor | `8080` |
-| `DB_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&...` |
+| `DATABASE_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&...` |
 | `ALLOWED_ORIGINS` | Orígenes permitidos para CORS | `http://localhost:5173` |
 | `DEV_MODE` | Modo desarrollo (true = CORS habilitado, sin embed) | `false` |
 
