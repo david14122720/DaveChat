@@ -212,7 +212,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	})
 }
 
-func (h *AuthHandler) RefreshToken(c echo.Context) error {
+func (h *AuthHandler) Refresh(c echo.Context) error {
 	var req refreshTokenInput
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
