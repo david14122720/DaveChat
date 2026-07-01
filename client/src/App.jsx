@@ -11,7 +11,9 @@ function App() {
   const { user, loading, signIn, signUp, signOut } = useAuth();
 
   useEffect(() => {
-    if (!user) {
+    if (user) {
+      wsClient.connect();
+    } else {
       wsClient.disconnect();
     }
   }, [user]);
