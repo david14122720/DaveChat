@@ -152,6 +152,12 @@ Verificar:
 4. Firewall del host: `iptables -L -n`
 5. Que el externalPort esté seteado (consultar con `*-one`)
 
-### Después de eliminar una base
+### Variables de entorno en la app
 
-Si se borra y se crea de nuevo con el mismo nombre, el volumen Docker persiste con datos viejos. Si se quiere fresh start, borrar el volumen manualmente desde el servidor.
+Si la app está en Dokploy con `DB_DSN` como env var y el MCP `saveEnvironment` devuelve error de schema, no se puede actualizar desde el MCP. Solución:
+
+1. **Cambiar el nombre de la variable en el código** (ej: `DB_DSN` → `DATABASE_DSN`), así el valor viejo en Dokploy queda inerte
+2. El default hardcodeado en `config.go` se usa cuando la env var no está seteada
+3. Para desarrollo local, actualizar `server/.env` y `infra/docker-compose.yml` con el nuevo nombre
+
+---

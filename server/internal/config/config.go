@@ -25,7 +25,7 @@ func Load() *Config {
 
 	return &Config{
 		Port:           getEnv("PORT", "8080"),
-		DBDSN:          getEnv("DB_DSN", "davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"),
+		DBDSN:          getEnv("DATABASE_DSN", "davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"),
 		JWTSecret:      jwtSecret,
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 		DevMode:        os.Getenv("DEV_MODE") == "true",

@@ -8,7 +8,7 @@ Sistema de mensajería en tiempo real con soporte de llamadas de audio/video ví
 |------|-----------|
 | **Backend** | Go 1.26, Echo v4, Gorilla WebSocket, JWT (golang-jwt) |
 | **Frontend** | React 18, Vite 5, TailwindCSS 3, Framer Motion, Lucide Icons |
-| **Base de datos** | MariaDB (Dokploy) |
+| **Base de datos** | MariaDB (MySQL) |
 | **Tiempo real** | WebSocket propio + WebRTC (RTCPeerConnection) |
 | **Autenticación** | JWT + Refresh Tokens con rotación |
 | **Infraestructura** | Docker, Dokploy |
@@ -44,7 +44,6 @@ Sistema de mensajería en tiempo real con soporte de llamadas de audio/video ví
 ├── infra/
 │   └── mariadb/init.sql     # Schema completo de base de datos
 ├── Dockerfile               # Multi-stage build (Node 20 → Go 1.25 → Alpine)
-├── dokploy.md               # Despliegue de bases de datos en Dokploy
 └── .env                     # Variables de entorno
 ```
 
@@ -82,7 +81,7 @@ docker compose -f infra/docker-compose.yml up -d --build
 |----------|------------|---------|
 | `JWT_SECRET` | Secreto para firmar JWT (requerido) | — |
 | `PORT` | Puerto del servidor | `8080` |
-| `DB_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&...` |
+| `DATABASE_DSN` | DSN de conexión a MariaDB | `davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&...` |
 | `ALLOWED_ORIGINS` | Orígenes permitidos para CORS | `http://localhost:5173` |
 | `DEV_MODE` | Modo desarrollo (true = CORS habilitado, sin embed) | `false` |
 
