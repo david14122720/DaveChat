@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef } from 'react';
 import { wsClient } from '../lib/websocket';
 
 const CallState = {
@@ -59,6 +59,29 @@ export function CallProvider({ children }) {
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
 
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState('');
+
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const inputs = devices.filter(d => d.kind === 'audioinput');
+      setAudioDevices(inputs);
+      if (!selectedAudioDevice && inputs.length > 0) {
+        setSelectedAudioDevice(inputs[0].deviceId);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+        setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+      }).catch(() => {});
+    };
+    navigator.mediaDevices.addEventListener('devicechange', handler);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', handler);
+  }, []);
+
   const getIceConfig = useCallback(() => ({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -80,12 +103,23 @@ export function CallProvider({ children }) {
     dispatch({ type: 'SET_REMOTE_STREAM', stream: null });
   }, [dispatch]);
 
-  const createPeerConnection = useCallback(async (remoteUserId) => {
+  const createPeerConnection = useCallback(async (remoteUserId, callType = 'audio') => {
     const pc = new RTCPeerConnection(getIceConfig());
     pcRef.current = pc;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+      if (selectedAudioDevice) {
+        audioConstraints.deviceId = { exact: selectedAudioDevice };
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints,
+        video: callType === 'video',
+      });
       localStreamRef.current = stream;
       dispatch({ type: 'SET_LOCAL_STREAM', stream });
 
@@ -132,7 +166,7 @@ export function CallProvider({ children }) {
     };
 
     return pc;
-  }, [getIceConfig, cleanupCall]);
+  }, [getIceConfig, cleanupCall, selectedAudioDevice]);
 
   useEffect(() => {
     wsClient.connect();
@@ -212,7 +246,7 @@ export function CallProvider({ children }) {
       console.log('📞 Iniciando llamada ' + callType + ' con ' + targetUserId + '...');
       dispatch({ type: 'SET_CALLING', peerId: targetUserId, callType });
 
-      const pc = await createPeerConnection(targetUserId);
+      const pc = await createPeerConnection(targetUserId, callType);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
@@ -232,7 +266,7 @@ export function CallProvider({ children }) {
     try {
       console.log('📞 Aceptando llamada...');
 
-      const pc = await createPeerConnection(callerId);
+      const pc = await createPeerConnection(callerId, state.callType || 'audio');
 
       const remoteOffer = new RTCSessionDescription(state.sdp);
       await pc.setRemoteDescription(remoteOffer);
@@ -276,6 +310,9 @@ export function CallProvider({ children }) {
     rejectCall,
     endCall,
     resetCall,
+    audioDevices,
+    selectedAudioDevice,
+    setSelectedAudioDevice,
     isIdle: state.callState === CallState.IDLE,
     isCalling: state.callState === CallState.CALLING,
     isRinging: state.callState === CallState.RINGING,
