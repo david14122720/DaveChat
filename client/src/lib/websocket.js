@@ -6,6 +6,7 @@ class WebSocketClient {
     this.listeners = {};
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
+    this.pendingMessages = [];
   }
 
   connect() {
@@ -23,6 +24,7 @@ class WebSocketClient {
     this.ws.onopen = () => {
       console.log('✅ WebSocket conectado');
       this.reconnectAttempts = 0;
+      this._flushPending();
     };
 
     this.ws.onmessage = (event) => {
@@ -53,14 +55,29 @@ class WebSocketClient {
     setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
   }
 
+  _flushPending() {
+    while (this.pendingMessages.length > 0) {
+      const msg = this.pendingMessages.shift();
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(msg));
+      } else {
+        // Connection dropped again — re-queue and stop flushing
+        this.pendingMessages.unshift(msg);
+        break;
+      }
+    }
+  }
+
   send(type, payload = {}, target = '', extra = {}) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn('⚠️ WS no conectado');
+    const msg = { type, payload, target, ...extra };
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('📤 WS envía:', msg);
+      this.ws.send(JSON.stringify(msg));
       return;
     }
-    const msg = { type, payload, target, ...extra };
-    console.log('📤 WS envía:', msg);
-    this.ws.send(JSON.stringify(msg));
+    console.warn('⚠️ WS no conectado, encolando mensaje:', msg);
+    this.pendingMessages.push(msg);
+    this.connect(); // Ensure we're trying to connect
   }
 
   on(type, callback) {
