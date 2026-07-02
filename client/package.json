@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp -r dist ../server/cmd/client/dist",
+    "build": "vite build",
+    "postbuild": "test -d ../server && cp -r dist ../server/cmd/client/dist || true",
     "preview": "vite preview"
   },
   "dependencies": {
