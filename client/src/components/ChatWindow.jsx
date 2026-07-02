@@ -134,9 +134,17 @@ const ChatWindow = ({ contact, currentUser, onBack }) => {
           </button>
 
           <div className="relative shrink-0">
-            <div className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex items-center justify-center font-bold text-slate-200 shadow-inner">
-              {contact.username[0].toUpperCase()}
-            </div>
+            {contact.avatar_url ? (
+              <img
+                src={contact.avatar_url.startsWith('http') ? contact.avatar_url : `${import.meta.env.VITE_API_URL || ''}${contact.avatar_url}`}
+                alt={contact.username}
+                className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover border border-slate-600 shadow-inner"
+              />
+            ) : (
+              <div className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex items-center justify-center font-bold text-slate-200 shadow-inner">
+                {contact.username[0].toUpperCase()}
+              </div>
+            )}
             <div className={'absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-900 rounded-full ' + (isOnline(contact) ? 'bg-emerald-400' : 'bg-slate-600')}></div>
           </div>
 

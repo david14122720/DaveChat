@@ -118,6 +118,22 @@ class ApiClient {
     return data;
   }
 
+  async uploadAvatar(formData) {
+    const token = this.getToken();
+    const res = await fetch(`${this.baseUrl}/api/profiles/me/avatar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (res.status === 401) { this.clearToken(); window.location.reload(); }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `Upload failed (${res.status})`); }
+    return res.json();
+  }
+
+  async deleteAvatar() {
+    return this.request('/api/profiles/me/avatar', { method: 'DELETE' });
+  }
+
   async searchMessages(conversationId, query) {
     return this.request(`/api/conversations/${conversationId}/messages/search?q=${encodeURIComponent(query)}`);
   }

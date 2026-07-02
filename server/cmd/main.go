@@ -72,6 +72,9 @@ func main() {
 		}))
 	}
 
+	// Static file serving for uploads (outside DevMode guard — works in both dev and prod)
+	e.Static("/uploads", cfg.UploadDir)
+
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -87,9 +90,11 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	profileHandler := &handlers.ProfileHandler{DB: db}
+	profileHandler := &handlers.ProfileHandler{DB: db, Config: cfg}
 	protected.GET("/profiles", profileHandler.List)
 	protected.GET("/profiles/:id", profileHandler.Get)
+	protected.POST("/profiles/me/avatar", profileHandler.AvatarUpload)
+	protected.DELETE("/profiles/me/avatar", profileHandler.AvatarDelete)
 
 	convHandler := &handlers.ConversationHandler{DB: db}
 	protected.GET("/conversations", convHandler.List)

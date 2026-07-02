@@ -4,3 +4,4 @@ server/cmd/client/dist/
 server/davechat
 plan_llamadas.md
 server/main
+server/uploads/

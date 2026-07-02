@@ -11,3 +11,7 @@ services:
       DATABASE_DSN: "davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"
       JWT_SECRET: "change-me-in-production"
       ALLOWED_ORIGINS: "*"
+      UPLOAD_DIR: "/app/uploads"
+      MAX_FILE_SIZE: "5242880"
+    volumes:
+      - ./uploads:/app/uploads

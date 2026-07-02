@@ -1,55 +1,6 @@
-# User Profiles Specification
+# Spec: Profile Picture Upload
 
-## Purpose
-
-REST handlers for reading and updating user profiles. Profiles are stored in the `users` table (merged with auth — no separate profiles table). Supports avatar upload and deletion via dedicated endpoints in addition to JSON PATCH.
-
-## Requirements
-
-### Requirement: Get Own Profile
-
-The system MUST expose `GET /api/profiles/me` returning the authenticated user's profile. The `avatar_url` field SHALL reflect the path from the most recent upload (or PATCH) when set; null when none.
-
-#### Scenario: Returns current user
-
-- GIVEN a valid JWT for user Alice
-- WHEN `GET /api/profiles/me` is called
-- THEN response is HTTP 200 with `{id, email, username, avatar_url, status, last_seen}`
-- AND `avatar_url` reflects the path from the most recent upload or PATCH
-
-### Requirement: List All Profiles
-
-The system MUST expose `GET /api/profiles` returning all users except the authenticated one.
-
-#### Scenario: Returns excluding self
-
-- GIVEN three users exist (Alice, Bob, Charlie)
-- WHEN Alice calls `GET /api/profiles`
-- THEN response is HTTP 200 with array containing Bob and Charlie
-- AND Alice is excluded from results
-
-#### Scenario: Empty list when alone
-
-- GIVEN only one user exists (Alice)
-- WHEN Alice calls `GET /api/profiles`
-- THEN response is HTTP 200 with empty array
-
-### Requirement: Update Profile
-
-The system MUST expose `PATCH /api/profiles/me` for updating username and avatar_url. The upload endpoint (`POST /api/profiles/me/avatar`) is an ADDITIONAL mechanism for setting `avatar_url` via file upload.
-
-#### Scenario: Valid update succeeds
-
-- GIVEN a valid JWT for user Alice
-- WHEN `PATCH /api/profiles/me` with `{username: "AliceNew"}`
-- THEN response is HTTP 200 with updated user
-- AND the username is changed in the database
-
-#### Scenario: Duplicate username returns 409
-
-- GIVEN Bob already has username "Bob"
-- WHEN Alice tries to update her username to "Bob"
-- THEN response is HTTP 409
+## ADDED Requirements — Avatar Upload
 
 ### Requirement: Upload Avatar (POST)
 
@@ -57,7 +8,7 @@ The system MUST expose `POST /api/profiles/me/avatar` accepting `multipart/form-
 
 | Scenario | GIVEN | WHEN | THEN |
 |----------|-------|------|------|
-| Valid upload succeeds | Alice with JWT, no existing avatar | POST with valid JPEG \<5MB | 200 + `{avatar_url: "/uploads/\<uuid\>.jpg"}`, file on disk |
+| Valid upload succeeds | Alice with JWT, no existing avatar | POST with valid JPEG <5MB | 200 + `{avatar_url: "/uploads/<uuid>.jpg"}`, file on disk |
 | Replace existing | Alice has `avatar_url = "/uploads/old.jpg"` | POST with new valid PNG | Old file deleted, 200 + new URL |
 | Wrong MIME returns 415 | Valid JWT | POST with GIF file | HTTP 415 |
 | Too large returns 413 | Valid JWT | POST with 6MB file | HTTP 413 |
@@ -89,3 +40,34 @@ The client MUST provide a clickable avatar that opens a file picker (`accept: im
 ### Requirement: Configuration
 
 The system MUST read `UPLOAD_DIR` env var (default `/app/uploads`) for the disk path and `MAX_FILE_SIZE` env var (default `5242880` — 5MB) for the size limit.
+
+## MODIFIED Requirements — User Profiles
+
+### Requirement: Get Own Profile
+
+Same behavior — `GET /api/profiles/me` returns `avatar_url`. The field SHALL now reflect the uploaded file path when set via the upload endpoint.
+(Previously: avatar_url only settable via PATCH JSON body)
+
+#### Scenario: Returns current user (unchanged)
+
+- GIVEN a valid JWT for user Alice
+- WHEN `GET /api/profiles/me` is called
+- THEN response is HTTP 200 with `{id, email, username, avatar_url, status, last_seen}`
+- AND `avatar_url` reflects the path from the most recent upload
+
+### Requirement: Update Profile
+
+Same behavior — `PATCH /api/profiles/me` still accepts `avatar_url` via JSON body. The upload endpoint is an ADDITIONAL mechanism.
+(Previously: PATCH was the only way to set avatar_url)
+
+#### Scenario: Valid update succeeds (unchanged)
+
+- GIVEN a valid JWT for user Alice
+- WHEN `PATCH /api/profiles/me` with `{username: "AliceNew"}`
+- THEN response is HTTP 200 with updated user
+
+#### Scenario: Duplicate username returns 409 (unchanged)
+
+- GIVEN Bob already has username "Bob"
+- WHEN Alice tries to update her username to "Bob"
+- THEN response is HTTP 409

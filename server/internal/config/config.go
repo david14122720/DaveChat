@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,8 @@ type Config struct {
 	JWTSecret     string
 	AllowedOrigins string
 	DevMode       bool
+	UploadDir     string
+	MaxFileSize   int64
 }
 
 func Load() *Config {
@@ -29,7 +32,18 @@ func Load() *Config {
 		JWTSecret:      jwtSecret,
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 		DevMode:        os.Getenv("DEV_MODE") == "true",
+		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
+		MaxFileSize:    getEnvInt("MAX_FILE_SIZE", 5242880),
 	}
+}
+
+func getEnvInt(key string, fallback int64) int64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return fallback
 }
 
 func getEnv(key, fallback string) string {
