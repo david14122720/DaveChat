@@ -6,22 +6,7 @@ WebSocket hub for relaying real-time events (WebRTC signaling: offer, answer, IC
 
 ## Requirements
 
-### Requirement: WebSocket Connection
-
-The system MUST expose `GET /ws` with JWT auth via `?token=<jwt>` query parameter.
-
-#### Scenario: Valid token upgrades to WebSocket
-
-- GIVEN a valid JWT for user Alice
-- WHEN Alice connects to `ws://host/ws?token=<jwt>`
-- THEN the HTTP connection upgrades to WebSocket (HTTP 101)
-- AND Alice is registered in the hub as online
-
-#### Scenario: Missing or invalid token is rejected
-
-- GIVEN no token or an expired JWT
-- WHEN connecting to `/ws`
-- THEN the connection is rejected with HTTP 401
+> **NOTE**: WebSocket connection behavior (auth, upgrade, origin validation) has been moved to its own specification at `openspec/specs/websocket-connection/spec.md` as part of the security-fixes-v1 change. The signaling relay semantics below are unchanged.
 
 ### Requirement: Event Relay
 

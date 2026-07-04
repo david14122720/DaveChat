@@ -8,7 +8,8 @@ JWT-based registration and login replacing Supabase Auth. The Go server handles 
 
 ### Requirement: Register
 
-The system MUST expose `POST /api/auth/register` accepting email, password, and username.
+The system MUST expose `POST /api/auth/register` accepting email, password, and username. On registration conflict — duplicate email or duplicate username — the system MUST return a single generic error message that does not distinguish between conflict types.
+(Previously: returned distinct error messages for email vs username conflicts)
 
 #### Scenario: Valid registration creates user and returns JWT
 
@@ -18,11 +19,12 @@ The system MUST expose `POST /api/auth/register` accepting email, password, and 
 - AND the password is stored as bcrypt hash
 - AND a `users` row is created
 
-#### Scenario: Duplicate email returns 409
+#### Scenario: Duplicate email or username returns generic error
 
-- GIVEN user exists with email `a@b.com`
-- WHEN the same email is used for registration
-- THEN response is HTTP 409 with error message
+- GIVEN a user exists with email `a@b.com` (or username `Alice`)
+- WHEN `POST /api/auth/register` with the same email or username
+- THEN response is HTTP 409
+- AND response body is `{"error":"Registration failed. Email or username may already be in use."}`
 
 ### Requirement: Login
 
@@ -43,7 +45,8 @@ The system MUST expose `POST /api/auth/login` accepting email and password.
 
 ### Requirement: JWT Middleware
 
-The system MUST require a valid JWT `Authorization: Bearer <token>` header on protected routes.
+The system MUST require a valid JWT via `Authorization: Bearer <token>` header on protected routes. The middleware MUST reject any JWT supplied via `?token=` query parameter and return HTTP 401.
+(Previously: accepted JWT via either Authorization header or `?token=` query parameter)
 
 #### Scenario: Valid token allows access
 
@@ -62,3 +65,21 @@ The system MUST require a valid JWT `Authorization: Bearer <token>` header on pr
 - GIVEN a JWT with past `exp`
 - WHEN a protected route is called
 - THEN response is HTTP 401 with "token expired"
+
+#### Scenario: Token via query param returns 401
+
+- GIVEN a request with `?token=<valid_jwt>` and no `Authorization` header
+- WHEN a protected route is called
+- THEN response is HTTP 401
+- AND response body contains "Authorization header required"
+
+### Requirement: Logger Query String Omission
+
+The Echo Logger MUST omit query strings from logged request URIs.
+
+#### Scenario: Request URI logged without query strings
+
+- GIVEN a request to `/api/auth/login?token=secret`
+- WHEN Echo processes and logs the request
+- THEN the log entry contains `/api/auth/login`
+- AND the log entry MUST NOT contain the query string `token=secret`

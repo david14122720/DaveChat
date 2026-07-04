@@ -31,12 +31,8 @@ func AuthMiddleware(jwtSecret string) echo.MiddlewareFunc {
 			}
 
 			if tokenStr == "" {
-				tokenStr = c.QueryParam("token")
-			}
-
-			if tokenStr == "" {
 				return c.JSON(http.StatusUnauthorized, errorResponse{
-					Error: errorBody{Code: "AUTH_REQUIRED", Message: "Missing Authorization header or token query param"},
+					Error: errorBody{Code: "AUTH_REQUIRED", Message: "Authorization header required"},
 				})
 			}
 

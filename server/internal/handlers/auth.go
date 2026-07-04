@@ -119,14 +119,14 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE email = ?)", req.Email).Scan(&exists)
 	if exists {
 		return c.JSON(http.StatusConflict, ErrorResponse{
-			Error: ErrorBody{Code: "DUPLICATE_EMAIL", Message: "Email already registered"},
+			Error: ErrorBody{Code: "REGISTRATION_CONFLICT", Message: "Registration failed. Email or username may already be in use."},
 		})
 	}
 
 	h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM profiles WHERE username = ?)", req.Username).Scan(&exists)
 	if exists {
 		return c.JSON(http.StatusConflict, ErrorResponse{
-			Error: ErrorBody{Code: "DUPLICATE_USERNAME", Message: "Username already taken"},
+			Error: ErrorBody{Code: "REGISTRATION_CONFLICT", Message: "Registration failed. Email or username may already be in use."},
 		})
 	}
 

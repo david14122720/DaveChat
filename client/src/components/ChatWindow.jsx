@@ -136,7 +136,7 @@ const ChatWindow = ({ contact, currentUser, onBack }) => {
           <div className="relative shrink-0">
             {contact.avatar_url ? (
               <img
-                src={contact.avatar_url.startsWith('http') ? contact.avatar_url : `${import.meta.env.VITE_API_URL || ''}${contact.avatar_url}`}
+                src={contact.avatar_url.startsWith('http') || contact.avatar_url.startsWith('data:') ? contact.avatar_url : `${import.meta.env.VITE_API_URL || ''}${contact.avatar_url}`}
                 alt={contact.username}
                 className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover border border-slate-600 shadow-inner"
               />

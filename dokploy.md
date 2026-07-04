@@ -46,6 +46,45 @@ Todas las bases de datos están en el proyecto **"bases de datos"**, entorno **"
 
 ---
 
+## Volume Setup (DaveChat — Uploads)
+
+Para persistir los avatares subidos por los usuarios entre redeploys, la aplicación DaveChat necesita un volumen Docker nombrado montado en `/app/uploads`.
+
+| Campo | Valor |
+|-------|-------|
+| **Nombre del volumen** | `davechat-m3bjt5-uploads` |
+| **Mount path** | `/app/uploads` |
+| **Propósito** | Persistir avatares subidos (`/uploads/*`) |
+| **App relacionada** | DaveChat (`_-BbzRdJ18Cuh6EXslZvQ`) |
+
+### Pasos en la UI de Dokploy
+
+1. Ir a **Aplicaciones Web → production → DaveChat**
+2. Abrir la pestaña **Volumes** → **Add Volume**
+3. **Volume name**: `davechat-m3bjt5-uploads`
+4. **Mount path**: `/app/uploads`
+5. **Save** — esto registra el named volume en Dokploy (no reinicia el contenedor todavía)
+6. **NO redeploy aún** — el volumen debe existir antes del primer redeploy
+
+### Secuencia crítica: configure → verify → redeploy
+
+```
+ 1. Add volume (UI) ──→ 2. Verify aparece en la lista ──→ 3. Redeploy
+```
+
+**No invertir el orden.** Si se redeploya sin el volumen montado, los avatares existentes en la capa writable del contenedor se pierden permanentemente. Dokploy guarda la configuración del volumen en su propia base de datos al hacer Save — el container restart solo ocurre en el deploy.
+
+### Verificar persistencia
+
+1. Subir un avatar de prueba (Settings → Upload Photo)
+2. Ir a la URL del avatar (`https://davechat.tudominio.com/uploads/<filename>`) y confirmar que carga
+3. Ir a Dokploy → botón **Redeploy** en la app DaveChat
+4. Esperar que termine el redeploy
+5. Recargar la página de DaveChat — el avatar debe seguir visible
+6. (Opcional) Verificar que el volumen aparece en Dokploy: Volumes → `davechat-m3bjt5-uploads` con estado `running`
+
+---
+
 ## Cómo crear una base de datos desde el MCP
 
 ### 1. Crear el servicio

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { Search, MessageSquare, Settings, LogOut, Loader2, Wifi, WifiOff, Phone, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
 import ChatWindow from './ChatWindow';
-import CallHistory from './CallHistory';
+
+const CallHistory = lazy(() => import('./CallHistory'));
 
 const isOnline = (contact) => contact?.status === 'online';
 
@@ -158,9 +159,10 @@ const MainLayout = ({ user, onLogout }) => {
               ) : avatarUrl ? (
                 <div className="relative" onClick={() => fileInputRef.current?.click()}>
                   <img
-                    src={avatarUrl.startsWith('http') ? avatarUrl : `${import.meta.env.VITE_API_URL || ''}${avatarUrl}`}
+                    src={avatarUrl.startsWith('http') || avatarUrl.startsWith('data:') ? avatarUrl : `${import.meta.env.VITE_API_URL || ''}${avatarUrl}`}
                     alt="Avatar"
-                    className="w-10 h-10 rounded-full object-cover border border-brand/30 shadow-sm cursor-pointer"
+                    className="w-12 h-12 rounded-full object-cover border-2 border-brand/30 shadow-md cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
                   />
                   <div
                     className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
@@ -251,9 +253,17 @@ const MainLayout = ({ user, onLogout }) => {
                       }
                     >
                       <div className="relative shrink-0">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-300 shadow-sm">
-                          {contact.username[0].toUpperCase()}
-                        </div>
+                        {contact.avatar_url ? (
+                          <img
+                            src={contact.avatar_url.startsWith('http') || contact.avatar_url.startsWith('data:') ? contact.avatar_url : `${import.meta.env.VITE_API_URL || ''}${contact.avatar_url}`}
+                            alt={contact.username}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-600 shadow-inner"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 flex items-center justify-center font-bold text-slate-200 shadow-inner">
+                            {contact.username[0].toUpperCase()}
+                          </div>
+                        )}
                         <div className={'absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-slate-900 rounded-full shadow-lg ' + (isOnline(contact) ? 'bg-emerald-400' : 'bg-slate-600')}></div>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -275,7 +285,9 @@ const MainLayout = ({ user, onLogout }) => {
           </>
         ) : (
           <div className="flex-1 overflow-hidden">
-            <CallHistory user={user} />
+            <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="w-6 h-6 text-brand-light animate-spin" /></div>}>
+              <CallHistory user={user} />
+            </Suspense>
           </div>
         )}
       </aside>
@@ -321,7 +333,7 @@ const MainLayout = ({ user, onLogout }) => {
                 <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-brand/30 shadow-lg">
                   {avatarUrl ? (
                     <img
-                      src={avatarUrl.startsWith('http') ? avatarUrl : `${import.meta.env.VITE_API_URL || ''}${avatarUrl}`}
+                      src={avatarUrl.startsWith('http') || avatarUrl.startsWith('data:') ? avatarUrl : `${import.meta.env.VITE_API_URL || ''}${avatarUrl}`}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                     />

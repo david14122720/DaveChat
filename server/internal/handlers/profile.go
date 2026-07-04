@@ -1,18 +1,24 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"errors"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"DaveChat/internal/config"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 type ProfileHandler struct {
@@ -20,11 +26,8 @@ type ProfileHandler struct {
 	Config *config.Config
 }
 
-var mimeExtMap = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
-}
+// maxAvatarDim is the maximum width or height for avatar images.
+const maxAvatarDim = 200
 
 func (h *ProfileHandler) markStalePresenceOffline() {
 	h.DB.Exec(`
@@ -154,18 +157,57 @@ func (h *ProfileHandler) getProfileResponse(userID string) (*profileResponse, er
 	return &p, nil
 }
 
+// decodeImage decodes an image from raw bytes, supporting JPEG, PNG, and WebP.
+func decodeImage(data []byte) (image.Image, error) {
+	// Try JPEG first (most common for avatars)
+	img, err := jpeg.Decode(bytes.NewReader(data))
+	if err == nil {
+		return img, nil
+	}
+	// Try PNG
+	img, err = png.Decode(bytes.NewReader(data))
+	if err == nil {
+		return img, nil
+	}
+	// Try WebP (registered via blank import)
+	img, _, err = image.Decode(bytes.NewReader(data))
+	if err == nil {
+		return img, nil
+	}
+	return nil, errors.New("unsupported image format: only JPEG, PNG, and WebP accepted")
+}
+
+// resizeImage scales img to fit within maxDim x maxDim while maintaining aspect ratio.
+func resizeImage(img image.Image, maxDim int) image.Image {
+	bounds := img.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= maxDim && h <= maxDim {
+		return img // no resize needed
+	}
+
+	ratio := math.Min(float64(maxDim)/float64(w), float64(maxDim)/float64(h))
+	newW := int(float64(w) * ratio)
+	newH := int(float64(h) * ratio)
+
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	return dst
+}
+
 func (h *ProfileHandler) AvatarUpload(c echo.Context) error {
 	userID, ok := c.Get("user_id").(string)
 	if !ok {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error: ErrorBody{Code: "UNAUTHORIZED", Message: "Missing user ID in context"},
-		})
-	}
-
-	// Ensure upload directory exists — idempotent
-	if err := os.MkdirAll(h.Config.UploadDir, 0755); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "UPLOAD_FAILED", Message: "Failed to create upload directory"},
 		})
 	}
 
@@ -195,51 +237,49 @@ func (h *ProfileHandler) AvatarUpload(c echo.Context) error {
 		})
 	}
 
-	// Validate MIME type via magic bytes (first 512 bytes)
-	buf := data
-	if len(buf) > 512 {
-		buf = buf[:512]
-	}
-	mimeType := http.DetectContentType(buf)
-	ext, ok := mimeExtMap[mimeType]
-	if !ok {
-		return c.JSON(http.StatusUnsupportedMediaType, ErrorResponse{
-			Error: ErrorBody{Code: "INVALID_MIME", Message: "Only JPEG, PNG, WebP accepted"},
-		})
+	// Validate MIME type via magic bytes
+	if len(data) > 512 {
+		buf := data[:512]
+		mimeType := http.DetectContentType(buf)
+		if !strings.HasPrefix(mimeType, "image/") {
+			return c.JSON(http.StatusUnsupportedMediaType, ErrorResponse{
+				Error: ErrorBody{Code: "INVALID_MIME", Message: "Only JPEG, PNG, WebP accepted"},
+			})
+		}
 	}
 
-	// Generate UUID-based filename
-	filename := newUUID() + ext
-	newPath := filepath.Join(h.Config.UploadDir, filename)
-
-	// Write file to disk
-	if err := os.WriteFile(newPath, data, 0644); err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "UPLOAD_FAILED", Message: "Failed to save file"},
-		})
-	}
-
-	// Fetch current avatar_url for old file cleanup
-	var oldAvatarURL *string
-	if err := h.DB.QueryRow("SELECT avatar_url FROM profiles WHERE id = ?", userID).Scan(&oldAvatarURL); err != nil {
-		slog.Warn("avatar upload: failed to query old avatar_url", "user_id", userID, "error", err)
-	}
-
-	// Update database
-	avatarURL := "/uploads/" + filename
-	_, err = h.DB.Exec("UPDATE profiles SET avatar_url = ? WHERE id = ?", avatarURL, userID)
+	// Decode, resize, and re-encode as JPEG quality 80
+	img, err := decodeImage(data)
 	if err != nil {
-		// Orphan cleanup: remove the file we just wrote
-		os.Remove(newPath)
+		return c.JSON(http.StatusUnsupportedMediaType, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_IMAGE", Message: err.Error()},
+		})
+	}
+
+	resized := resizeImage(img, maxAvatarDim)
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, resized, &jpeg.Options{Quality: 80}); err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorBody{Code: "ENCODE_FAILED", Message: "Failed to process image"},
+		})
+	}
+
+	// Base64 encode
+	base64Data := base64.StdEncoding.EncodeToString(buf.Bytes())
+	dataURI := "data:image/jpeg;base64," + base64Data
+
+	// Check size of final data URI (warn if approaching TEXT limit ~65KB)
+	if len(dataURI) > 60000 {
+		slog.Warn("avatar data URI is large", "user_id", userID, "bytes", len(dataURI))
+	}
+
+	// Save directly to DB
+	_, err = h.DB.Exec("UPDATE profiles SET avatar_url = ? WHERE id = ?", dataURI, userID)
+	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to update profile"},
 		})
-	}
-
-	// Delete old file if it exists and is a local upload
-	if oldAvatarURL != nil && *oldAvatarURL != "" && strings.HasPrefix(*oldAvatarURL, "/uploads/") {
-		oldPath := filepath.Join(h.Config.UploadDir, strings.TrimPrefix(*oldAvatarURL, "/uploads/"))
-		os.Remove(oldPath)
 	}
 
 	// Return full profile
@@ -260,23 +300,8 @@ func (h *ProfileHandler) AvatarDelete(c echo.Context) error {
 		})
 	}
 
-	// Fetch current avatar_url
-	var avatarURL *string
-	err := h.DB.QueryRow("SELECT avatar_url FROM profiles WHERE id = ?", userID).Scan(&avatarURL)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to fetch profile"},
-		})
-	}
-
-	// Delete file from disk if it is a local upload
-	if avatarURL != nil && *avatarURL != "" && strings.HasPrefix(*avatarURL, "/uploads/") {
-		diskPath := filepath.Join(h.Config.UploadDir, strings.TrimPrefix(*avatarURL, "/uploads/"))
-		os.Remove(diskPath) // best-effort — file may already be gone
-	}
-
-	// Set avatar_url to NULL in database
-	_, err = h.DB.Exec("UPDATE profiles SET avatar_url = NULL WHERE id = ?", userID)
+	// Set avatar_url to NULL in database (no files to delete — all in DB now)
+	_, err := h.DB.Exec("UPDATE profiles SET avatar_url = NULL WHERE id = ?", userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to update profile"},

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,11 +57,15 @@ func main() {
 		})
 	}
 
-	e.Use(middleware.Logger())
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: "${time_rfc3339} ${method} ${path_rfc3960} ${status} ${latency_human} ${bytes_in} ${bytes_out}\n",
+	}))
 	e.Use(middleware.Recover())
+	e.Use(authmiddleware.SecurityHeadersMiddleware(!cfg.DevMode))
 
-	store := middleware.NewRateLimiterMemoryStore(rate.Limit(100))
-	e.Use(middleware.RateLimiter(store))
+	// Per-IP rate limiter for auth endpoints (10 requests/min with burst of 3)
+	authLimiter := authmiddleware.NewIPRateLimiter(rate.Limit(10.0/60.0), 3, 10*time.Minute)
+	defer authLimiter.Stop()
 
 	if cfg.DevMode {
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -72,8 +77,11 @@ func main() {
 		}))
 	}
 
-	// Static file serving for uploads (outside DevMode guard — works in both dev and prod)
-	e.Static("/uploads", cfg.UploadDir)
+	// Migrate legacy filesystem avatars to base64 data URIs in the database
+	// Runs once at startup; after this, the uploads/ directory is no longer needed.
+	if db != nil {
+		handlers.MigrateLegacyAvatars(db, "./uploads")
+	}
 
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -81,9 +89,14 @@ func main() {
 
 	api := e.Group("/api")
 	authHandler := &handlers.AuthHandler{DB: db, Config: cfg}
-	api.POST("/auth/register", authHandler.Register)
-	api.POST("/auth/login", authHandler.Login)
-	api.POST("/auth/refresh", authHandler.Refresh)
+
+	// Auth routes with per-IP rate limiting
+	authRoutes := api.Group("")
+	authRoutes.Use(authmiddleware.RateLimitMiddleware(authLimiter))
+	authRoutes.POST("/auth/register", authHandler.Register)
+	authRoutes.POST("/auth/login", authHandler.Login)
+	authRoutes.POST("/auth/refresh", authHandler.Refresh)
+	api.GET("/ws", ws.HandleWebSocket(hub, cfg.JWTSecret, strings.Split(cfg.AllowedOrigins, ",")))
 
 	protected := api.Group("")
 	protected.Use(authmiddleware.AuthMiddleware(cfg.JWTSecret))
@@ -110,10 +123,6 @@ func main() {
 	callLogHandler := &handlers.CallLogHandler{DB: db}
 	protected.GET("/call-logs", callLogHandler.List)
 	protected.POST("/call-logs", callLogHandler.Create)
-
-	protected.GET("/ws", func(c echo.Context) error {
-		return ws.HandleWebSocket(hub, c)
-	})
 
 	if !cfg.DevMode {
 		subFS, err := fs.Sub(embedFS, "client/dist")

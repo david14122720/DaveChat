@@ -5,3 +5,5 @@ server/davechat
 plan_llamadas.md
 server/main
 server/uploads/
+
+testsprite_tests/tmp/config.json

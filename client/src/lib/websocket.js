@@ -17,9 +17,9 @@ class WebSocketClient {
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host;
-    const url = protocol + '://' + host + '/api/ws?token=' + token;
+    const url = protocol + '://' + host + '/api/ws';
 
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(url, [token]);
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;

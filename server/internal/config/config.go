@@ -9,13 +9,12 @@ import (
 )
 
 type Config struct {
-	Port          string
-	DBDSN         string
-	JWTSecret     string
+	Port           string
+	DBDSN          string
+	JWTSecret      string
 	AllowedOrigins string
-	DevMode       bool
-	UploadDir     string
-	MaxFileSize   int64
+	DevMode        bool
+	MaxFileSize    int64
 }
 
 func Load() *Config {
@@ -32,8 +31,7 @@ func Load() *Config {
 		JWTSecret:      jwtSecret,
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 		DevMode:        os.Getenv("DEV_MODE") == "true",
-		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
-		MaxFileSize:    getEnvInt("MAX_FILE_SIZE", 5242880),
+		MaxFileSize: getEnvInt("MAX_FILE_SIZE", 5242880),
 	}
 }
 

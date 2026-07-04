@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )
@@ -17,14 +19,6 @@ const (
 	maxMessageSize = 65536
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
 type WSMessage struct {
 	Type     string          `json:"type"`
 	Payload  json.RawMessage `json:"payload,omitempty"`
@@ -33,29 +27,105 @@ type WSMessage struct {
 	CallType string          `json:"call_type,omitempty"`
 }
 
-func HandleWebSocket(hub *Hub, c echo.Context) error {
-	userID := c.Get("user_id").(string)
-
-	conn, err := upgrader.Upgrade(c.Response().Writer, c.Request(), nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
-		return err
+// checkOrigin validates the Origin header against allowed origins.
+// If allowedOrigins is non-empty, the Origin must match one of the entries.
+// Otherwise, the Origin is compared to the request Host as a fallback.
+// An empty allowedOrigins with a missing Origin is rejected.
+func checkOrigin(r *http.Request, allowedOrigins []string) bool {
+	origin := r.Header.Get("Origin")
+	if len(allowedOrigins) > 0 {
+		if origin == "" {
+			return false
+		}
+		for _, allowed := range allowedOrigins {
+			allowed = strings.TrimSpace(allowed)
+			if allowed == "" {
+				continue
+			}
+			if origin == allowed {
+				return true
+			}
+		}
+		return false
 	}
 
-	client := &Client{
-		UserID: userID,
-		Send:   make(chan []byte, 256),
-		Hub:    hub,
-		Rooms:  make(map[string]bool),
+	// Fallback: compare Origin to Host
+	if origin == "" {
+		return false
 	}
+	scheme := "https://"
+	if r.TLS == nil {
+		scheme = "http://"
+	}
+	return origin == scheme+r.Host
+}
 
-	hub.Register(client)
-	client.Hub.TouchPresence(userID)
+// HandleWebSocket returns an Echo handler that upgrades to a WebSocket
+// connection with JWT authentication via Sec-WebSocket-Protocol header
+// and origin validation.
+//
+// The JWT is extracted from the Sec-WebSocket-Protocol header (sub-protocol),
+// parsed and validated using the provided jwtSecret. The origin is validated
+// against allowedOrigins (if non-empty) or falls back to comparing the
+// Origin header to the request Host.
+func HandleWebSocket(hub *Hub, jwtSecret string, allowedOrigins []string) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		tokenStr := c.Request().Header.Get("Sec-WebSocket-Protocol")
+		if tokenStr == "" {
+			return c.String(http.StatusForbidden, "Missing authentication token")
+		}
 
-	go writePump(client, conn)
-	go readPump(client, conn)
+		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return []byte(jwtSecret), nil
+		})
+		if err != nil || !token.Valid {
+			return c.String(http.StatusForbidden, "Invalid or expired token")
+		}
 
-	return nil
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.String(http.StatusForbidden, "Invalid token claims")
+		}
+
+		userID, ok := claims["user_id"].(string)
+		if !ok {
+			return c.String(http.StatusForbidden, "Missing user_id in token")
+		}
+
+		upgrader := websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				return checkOrigin(r, allowedOrigins)
+			},
+		}
+
+		conn, err := upgrader.Upgrade(c.Response().Writer, c.Request(), http.Header{
+			"Sec-WebSocket-Protocol": {tokenStr},
+		})
+		if err != nil {
+			log.Printf("WebSocket upgrade error: %v", err)
+			return err
+		}
+
+		client := &Client{
+			UserID: userID,
+			Send:   make(chan []byte, 256),
+			Hub:    hub,
+			Rooms:  make(map[string]bool),
+		}
+
+		hub.Register(client)
+		client.Hub.TouchPresence(userID)
+
+		go writePump(client, conn)
+		go readPump(client, conn)
+
+		return nil
+	}
 }
 
 func readPump(client *Client, conn *websocket.Conn) {
