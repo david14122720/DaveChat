@@ -131,7 +131,7 @@ func main() {
 		TurnUsername: cfg.TURNUsername,
 		TurnPassword: cfg.TURNPassword,
 	}
-	protected.GET("/config/webrtc", configHandler.GetWebRTCConfig)
+	api.GET("/config/webrtc", configHandler.GetWebRTCConfig)
 
 	if !cfg.DevMode {
 		subFS, err := fs.Sub(embedFS, "client/dist")

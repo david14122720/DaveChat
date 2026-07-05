@@ -35,7 +35,6 @@ class ApiClient {
 
     if (res.status === 401) {
       this.clearToken();
-      window.location.reload();
       throw new Error('Sesión expirada');
     }
 
