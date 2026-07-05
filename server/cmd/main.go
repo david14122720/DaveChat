@@ -126,6 +126,13 @@ func main() {
 	protected.GET("/call-logs", callLogHandler.List)
 	protected.POST("/call-logs", callLogHandler.Create)
 
+	configHandler := &handlers.ConfigHandler{
+		TurnURL:      cfg.TURNURL,
+		TurnUsername: cfg.TURNUsername,
+		TurnPassword: cfg.TURNPassword,
+	}
+	protected.GET("/config/webrtc", configHandler.GetWebRTCConfig)
+
 	if !cfg.DevMode {
 		subFS, err := fs.Sub(embedFS, "client/dist")
 		if err != nil {

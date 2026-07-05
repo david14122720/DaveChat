@@ -47,12 +47,14 @@ func NewHub(db *sql.DB) *Hub {
 
 func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if old, ok := h.clients[client.UserID]; ok {
 		close(old.Send)
 	}
 	h.clients[client.UserID] = client
 	h.setPresence(client.UserID, "online")
+	h.mu.Unlock()
+
+	h.broadcastPresence(client.UserID, "online", client)
 }
 
 func (h *Hub) Unregister(client *Client) {
@@ -106,6 +108,8 @@ func (h *Hub) Unregister(client *Client) {
 	delete(h.callStates, client.UserID)
 	h.mu.Unlock()
 
+	h.broadcastPresence(client.UserID, "offline", nil)
+
 	if wasInCall && h.db != nil {
 		id := newUUID()
 		now := time.Now()
@@ -131,6 +135,27 @@ func (h *Hub) Unregister(client *Client) {
 		default:
 		}
 	}
+}
+
+func (h *Hub) broadcastPresence(userID string, status string, excludeClient *Client) {
+	msg := map[string]interface{}{
+		"type":      "presence_update",
+		"user_id":   userID,
+		"status":    status,
+		"timestamp": time.Now().Unix(),
+	}
+	msgBytes, _ := json.Marshal(msg)
+
+	h.mu.RLock()
+	for _, client := range h.clients {
+		if client != excludeClient {
+			select {
+			case client.Send <- msgBytes:
+			default:
+			}
+		}
+	}
+	h.mu.RUnlock()
 }
 
 func (h *Hub) setPresence(userID, status string) {

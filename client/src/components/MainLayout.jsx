@@ -1,7 +1,8 @@
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { Search, MessageSquare, Settings, LogOut, Loader2, Wifi, WifiOff, Phone, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
+import { wsClient } from '../lib/websocket';
 import ChatWindow from './ChatWindow';
 
 const CallHistory = lazy(() => import('./CallHistory'));
@@ -40,11 +41,20 @@ const MainLayout = ({ user, onLogout }) => {
     setAvatarUrl(user?.avatar || user?.avatar_url || null);
   }, []);
 
-  useEffect(() => {
-    fetchProfiles();
-    const interval = setInterval(fetchProfiles, 15000);
-    return () => clearInterval(interval);
+  const handlePresenceUpdate = useCallback((msg) => {
+    if (msg.type === 'presence_update') {
+      setContacts(prev => prev.map(c =>
+        c.id === msg.user_id ? { ...c, status: msg.status, last_seen: new Date(msg.timestamp * 1000).toISOString() } : c
+      ));
+    }
   }, []);
+
+  useEffect(() => {
+    const unsubPresence = wsClient.on('presence_update', handlePresenceUpdate);
+    fetchProfiles();
+    const interval = setInterval(fetchProfiles, 30000);
+    return () => { clearInterval(interval); unsubPresence(); };
+  }, [handlePresenceUpdate]);
 
   useEffect(() => {
     if (!selectedContact) return;

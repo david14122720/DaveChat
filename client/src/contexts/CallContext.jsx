@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { wsClient } from '../lib/websocket';
+import { api } from '../lib/api';
 
 const CallState = {
   IDLE: 'idle',
@@ -60,6 +61,8 @@ export function CallProvider({ children }) {
   const remoteStreamRef = useRef(null);
   const ringtoneCtxRef = useRef(null);
   const ringtoneIntervalRef = useRef(null);
+  const callStateRef = useRef(CallState.IDLE);
+  const iceConfigRef = useRef(null);
 
   const [audioDevices, setAudioDevices] = useState([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState('');
@@ -84,12 +87,17 @@ export function CallProvider({ children }) {
     return () => navigator.mediaDevices.removeEventListener('devicechange', handler);
   }, []);
 
-  const getIceConfig = useCallback(() => ({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ],
-  }), []);
+  const getIceConfig = useCallback(() => {
+    if (iceConfigRef.current) {
+      return iceConfigRef.current;
+    }
+    return {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    };
+  }, []);
 
   const cleanupCall = useCallback(() => {
     if (pcRef.current) {
@@ -155,6 +163,10 @@ export function CallProvider({ children }) {
     }
     return stopRingtone;
   }, [state.callState, startRingtone, stopRingtone]);
+
+  useEffect(() => {
+    callStateRef.current = state.callState;
+  }, [state.callState]);
 
   const createPeerConnection = useCallback(async (remoteUserId, callType = 'audio') => {
     const pc = new RTCPeerConnection(getIceConfig());
@@ -231,10 +243,20 @@ export function CallProvider({ children }) {
     };
 
     pc.oniceconnectionstatechange = () => {
+      console.log('[ICE state]', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        dispatch({ type: 'SET_ERROR', error: `Conexión de red perdida (${pc.iceConnectionState})` });
+      }
     };
 
     return pc;
   }, [getIceConfig, cleanupCall, selectedAudioDevice]);
+
+  useEffect(() => {
+    api.get('/api/config/webrtc')
+      .then(cfg => { iceConfigRef.current = cfg; })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     wsClient.connect();
@@ -287,7 +309,7 @@ export function CallProvider({ children }) {
     }));
 
     unsubscribes.push(wsClient.on('close', () => {
-      if (state.callState !== CallState.IDLE) {
+      if (callStateRef.current !== CallState.IDLE) {
         console.warn('⚠️ WS desconectado durante llamada');
         cleanupCall();
         dispatch({ type: 'SET_ERROR', error: 'Conexión perdida' });

@@ -15,6 +15,9 @@ type Config struct {
 	AllowedOrigins string
 	DevMode        bool
 	MaxFileSize    int64
+	TURNURL        string
+	TURNUsername   string
+	TURNPassword   string
 }
 
 func Load() *Config {
@@ -32,6 +35,9 @@ func Load() *Config {
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 		DevMode:        os.Getenv("DEV_MODE") == "true",
 		MaxFileSize: getEnvInt("MAX_FILE_SIZE", 5242880),
+		TURNURL:        getEnv("TURN_URL", ""),
+		TURNUsername:   getEnv("TURN_USERNAME", ""),
+		TURNPassword:   getEnv("TURN_PASSWORD", ""),
 	}
 }
 
