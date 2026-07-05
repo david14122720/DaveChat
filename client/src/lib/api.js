@@ -33,12 +33,17 @@ class ApiClient {
       headers,
     });
 
-    if (res.status === 401) {
-      this.clearToken();
-      throw new Error('Sesión expirada');
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
     }
 
-    const data = await res.json();
+    if (res.status === 401) {
+      this.clearToken();
+      throw new Error(data?.error?.message || 'Sesión expirada');
+    }
 
     if (!res.ok) {
       throw new Error(data?.error?.message || `Error ${res.status}`);
