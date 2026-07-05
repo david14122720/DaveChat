@@ -32,7 +32,7 @@ func SecurityHeadersMiddleware(devMode bool) echo.MiddlewareFunc {
 			c.Response().Header().Set("X-Frame-Options", "DENY")
 			c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 			c.Response().Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			c.Response().Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+			c.Response().Header().Set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()")
 			return next(c)
 		}
 	}
