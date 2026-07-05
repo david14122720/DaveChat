@@ -27,7 +27,7 @@ func SecurityHeadersMiddleware(devMode bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Content-Security-Policy-Report-Only",
-				"default-src 'self'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; script-src 'self'")
+				"default-src 'self'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' https://static.cloudflareinsights.com; font-src 'self' https://fonts.gstatic.com")
 			c.Response().Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 			c.Response().Header().Set("X-Frame-Options", "DENY")
 			c.Response().Header().Set("X-Content-Type-Options", "nosniff")

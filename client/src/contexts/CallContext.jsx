@@ -253,7 +253,7 @@ export function CallProvider({ children }) {
   }, [getIceConfig, cleanupCall, selectedAudioDevice]);
 
   useEffect(() => {
-    api.get('/api/config/webrtc')
+    api.request('/api/config/webrtc')
       .then(cfg => { iceConfigRef.current = cfg; })
       .catch(() => {});
   }, []);
