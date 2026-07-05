@@ -71,43 +71,44 @@ func (h *Hub) Unregister(client *Client) {
 		h.setPresence(client.UserID, "offline")
 		delete(h.lastPresenceTouch, client.UserID)
 	}
-	for roomID := range client.Rooms {
-		if members, ok := h.rooms[roomID]; ok {
-			delete(members, client.UserID)
-			if len(members) == 0 {
-				delete(h.rooms, roomID)
+for roomID := range client.Rooms {
+			if members, ok := h.rooms[roomID]; ok {
+				delete(members, client.UserID)
+				if len(members) == 0 {
+					delete(h.rooms, roomID)
+				}
 			}
 		}
-	}
-	if pid, ok := h.callPeers[client.UserID]; ok {
-		peerID = pid
-		notifyPeer = true
-		wasInCall = true
-		callPeerID = pid
-		callType = h.callTypes[client.UserID]
+		if pid, ok := h.callPeers[client.UserID]; ok {
+			peerID = pid
+			notifyPeer = true
+			wasInCall = true
+			callPeerID = pid
+			callType = h.callTypes[client.UserID]
 
-		if pc, ok := h.clients[peerID]; ok {
-			peerClient = pc
+			if pc, ok := h.clients[peerID]; ok {
+				peerClient = pc
+			}
+			h.callStates[peerID] = "idle"
+			delete(h.callPeers, peerID)
+			delete(h.callPeers, client.UserID)
+			delete(h.callStartTimes, client.UserID)
+			delete(h.callStartTimes, peerID)
+			delete(h.callTypes, client.UserID)
+			delete(h.callTypes, peerID)
+			if t, ok := h.CallTimeouts[peerID]; ok {
+				t.Stop()
+				delete(h.CallTimeouts, peerID)
+			}
+			if t, ok := h.CallTimeouts[client.UserID]; ok {
+				t.Stop()
+				delete(h.CallTimeouts, client.UserID)
+			}
 		}
-		h.callStates[peerID] = "idle"
-		delete(h.callPeers, peerID)
-		delete(h.callPeers, client.UserID)
-		delete(h.callStartTimes, client.UserID)
-		delete(h.callStartTimes, peerID)
-		delete(h.callTypes, client.UserID)
-		delete(h.callTypes, peerID)
-		if t, ok := h.CallTimeouts[peerID]; ok {
-			t.Stop()
-			delete(h.CallTimeouts, peerID)
-		}
-		if t, ok := h.CallTimeouts[client.UserID]; ok {
-			t.Stop()
-			delete(h.CallTimeouts, client.UserID)
-		}
-	}
-	delete(h.callStates, client.UserID)
-	h.mu.Unlock()
+		delete(h.callStates, client.UserID)
+		h.mu.Unlock(); // UNLOCK BEFORE BROADCASTING to avoid deadlock
 
+	// AFTER releasing lock (call with mutex protection)
 	h.broadcastPresence(client.UserID, "offline", nil)
 
 	if wasInCall && h.db != nil {

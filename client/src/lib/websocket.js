@@ -91,14 +91,11 @@ class WebSocketClient {
     this._teardownVisibilityHandler();
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[WS] Tab visible, reconnecting');
+        console.log('[WS] Tab visible, ensuring ping');
         this.maxReconnectAttempts = 5;
-        if (this.ws) {
-          this.ws.onclose = null;
-          this.ws.close();
-          this.ws = null;
-        }
-        this.connect();
+        this._startPing();
+      } else {
+        this._stopPing();
       }
     };
     this._visibilityHandler = handleVisibility;
