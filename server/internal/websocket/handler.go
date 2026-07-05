@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -44,12 +45,12 @@ func checkOrigin(r *http.Request, allowedOrigins []string) bool {
 		return true
 	}
 
-	// Always allow same-origin connections
-	scheme := "https://"
-	if r.TLS == nil {
-		scheme = "http://"
-	}
-	if origin == scheme+r.Host {
+	// Same-origin check: compare just the host part to handle reverse proxy scenarios
+	// where TLS terminates at the proxy layer (e.g. Traefik in Dokploy).
+	// When r.TLS is nil (proxy-terminated), we'd reconstruct http:// instead of https://,
+	// causing a mismatch with the browser's Origin header.
+	originURL, err := url.Parse(origin)
+	if err == nil && originURL.Host == r.Host {
 		return true
 	}
 
@@ -115,7 +116,7 @@ func HandleWebSocket(hub *Hub, jwtSecret string, allowedOrigins []string) echo.H
 		})
 		if err != nil {
 			log.Printf("WebSocket upgrade error: %v", err)
-			return err
+			return nil // upgrader.Upgrade() already wrote the response; returning err would cause Echo to double-write
 		}
 
 		client := &Client{
