@@ -61,7 +61,7 @@ func main() {
 		Format: "${time_rfc3339} ${method} ${path_rfc3960} ${status} ${latency_human} ${bytes_in} ${bytes_out}\n",
 	}))
 	e.Use(middleware.Recover())
-	e.Use(authmiddleware.SecurityHeadersMiddleware(!cfg.DevMode))
+	e.Use(authmiddleware.SecurityHeadersMiddleware(cfg.DevMode))
 
 	// Per-IP rate limiter for auth endpoints (10 requests/min with burst of 3)
 	authLimiter := authmiddleware.NewIPRateLimiter(rate.Limit(10.0/60.0), 3, 10*time.Minute)
@@ -102,8 +102,10 @@ func main() {
 	protected.Use(authmiddleware.AuthMiddleware(cfg.JWTSecret))
 
 	protected.GET("/auth/me", authHandler.Me)
+	protected.POST("/auth/logout", authHandler.Logout)
 
 	profileHandler := &handlers.ProfileHandler{DB: db, Config: cfg}
+	go profileHandler.StartBackgroundPresence(context.Background())
 	protected.GET("/profiles", profileHandler.List)
 	protected.GET("/profiles/:id", profileHandler.Get)
 	protected.POST("/profiles/me/avatar", profileHandler.AvatarUpload)

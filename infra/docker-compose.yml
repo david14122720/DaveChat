@@ -9,8 +9,8 @@ services:
     environment:
       PORT: "8080"
       DATABASE_DSN: "davechat:davechat_pass@tcp(192.168.101.133:3307)/davechat?parseTime=true&charset=utf8mb4&loc=UTC"
-      JWT_SECRET: "change-me-in-production"
-      ALLOWED_ORIGINS: "*"
+      # JWT_SECRET: set via .env or environment variable in production
+      ALLOWED_ORIGINS: "http://localhost:5173,http://davechat.davidluna.local"
       UPLOAD_DIR: "/app/uploads"
       MAX_FILE_SIZE: "5242880"
     volumes:

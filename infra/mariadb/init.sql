@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS read_receipts (
     FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE INDEX idx_read_receipts_user_id ON read_receipts(user_id);
+
 -- Refresh tokens
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id CHAR(36) PRIMARY KEY,
@@ -83,6 +85,8 @@ CREATE TABLE IF NOT EXISTS call_logs (
     FOREIGN KEY (caller_id) REFERENCES profiles(id) ON DELETE CASCADE,
     FOREIGN KEY (callee_id) REFERENCES profiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_call_logs_status ON call_logs(status);
 
 -- Full-text search on messages
 ALTER TABLE messages ADD FULLTEXT INDEX IF NOT EXISTS ft_messages_content (content);

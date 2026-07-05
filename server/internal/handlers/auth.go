@@ -311,6 +311,32 @@ func (h *AuthHandler) Refresh(c echo.Context) error {
 	})
 }
 
+func (h *AuthHandler) Logout(c echo.Context) error {
+	var req refreshTokenInput
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "INVALID_INPUT", Message: "Invalid request body"},
+		})
+	}
+	if req.RefreshToken == "" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorBody{Code: "MISSING_FIELDS", Message: "Refresh token is required"},
+		})
+	}
+
+	hashedToken := sha256.Sum256([]byte(req.RefreshToken))
+	tokenHash := fmt.Sprintf("%x", hashedToken)
+
+	_, err := h.DB.Exec("DELETE FROM refresh_tokens WHERE token_hash = ?", tokenHash)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to delete refresh token"},
+		})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 func generateJWT(userID, secret string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,

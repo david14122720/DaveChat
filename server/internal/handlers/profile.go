@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +40,20 @@ func (h *ProfileHandler) markStalePresenceOffline() {
 	`)
 }
 
+func (h *ProfileHandler) StartBackgroundPresence(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			h.markStalePresenceOffline()
+		case <-ctx.Done():
+			slog.Info("background presence: shutting down")
+			return
+		}
+	}
+}
+
 type profileResponse struct {
 	ID        string  `json:"id"`
 	Username  string  `json:"username"`
@@ -55,7 +71,15 @@ func (h *ProfileHandler) List(c echo.Context) error {
 		})
 	}
 
-	h.markStalePresenceOffline()
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 0 {
+		page = 0
+	}
+	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	offset := page * pageSize
 
 	rows, err := h.DB.Query(
 		`SELECT id, username, email, avatar_url,
@@ -68,8 +92,9 @@ func (h *ProfileHandler) List(c echo.Context) error {
 		 WHERE id != ?
 		 ORDER BY
 			CASE WHEN status = 'online' AND last_seen >= NOW(3) - INTERVAL 90 SECOND THEN 0 ELSE 1 END,
-			username ASC`,
-		userID,
+			username ASC
+		 LIMIT ? OFFSET ?`,
+		userID, pageSize, offset,
 	)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -105,7 +130,6 @@ func (h *ProfileHandler) Get(c echo.Context) error {
 
 	var p profileResponse
 	var lastSeen sql.NullTime
-	h.markStalePresenceOffline()
 
 	err := h.DB.QueryRow(
 		`SELECT id, username, email, avatar_url,
@@ -138,7 +162,6 @@ func (h *ProfileHandler) Get(c echo.Context) error {
 func (h *ProfileHandler) getProfileResponse(userID string) (*profileResponse, error) {
 	var p profileResponse
 	var lastSeen sql.NullTime
-	h.markStalePresenceOffline()
 	err := h.DB.QueryRow(
 		`SELECT id, username, email, avatar_url,
 			CASE

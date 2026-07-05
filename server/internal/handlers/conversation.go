@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -33,13 +34,24 @@ func (h *ConversationHandler) List(c echo.Context) error {
 		})
 	}
 
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 0 {
+		page = 0
+	}
+	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	offset := page * pageSize
+
 	rows, err := h.DB.Query(`
 		SELECT c.id, c.type, c.created_at, c.last_message_at
 		FROM conversations c
 		JOIN participants p ON c.id = p.conversation_id
 		WHERE p.user_id = ?
 		ORDER BY c.last_message_at DESC
-	`, userID)
+		LIMIT ? OFFSET ?
+	`, userID, pageSize, offset)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorBody{Code: "INTERNAL", Message: "Failed to fetch conversations"},
