@@ -28,36 +28,36 @@ type WSMessage struct {
 }
 
 // checkOrigin validates the Origin header against allowed origins.
-// If allowedOrigins is non-empty, the Origin must match one of the entries.
-// Otherwise, the Origin is compared to the request Host as a fallback.
-// An empty allowedOrigins with a missing Origin is rejected.
+// Same-origin connections are always allowed (they cannot be CSWSH attacks).
+// Additional origins can be configured via AllowedOrigins for development
+// (e.g. http://localhost:5173 when the API runs on a different port).
 func checkOrigin(r *http.Request, allowedOrigins []string) bool {
 	origin := r.Header.Get("Origin")
-	if len(allowedOrigins) > 0 {
-		if origin == "" {
-			return false
-		}
-		for _, allowed := range allowedOrigins {
-			allowed = strings.TrimSpace(allowed)
-			if allowed == "" {
-				continue
-			}
-			if origin == allowed {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Fallback: compare Origin to Host
 	if origin == "" {
 		return false
 	}
+
+	// Always allow same-origin connections
 	scheme := "https://"
 	if r.TLS == nil {
 		scheme = "http://"
 	}
-	return origin == scheme+r.Host
+	if origin == scheme+r.Host {
+		return true
+	}
+
+	// Check against explicitly allowed origins (e.g. dev mode)
+	for _, allowed := range allowedOrigins {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "" {
+			continue
+		}
+		if origin == allowed {
+			return true
+		}
+	}
+
+	return false
 }
 
 // HandleWebSocket returns an Echo handler that upgrades to a WebSocket
