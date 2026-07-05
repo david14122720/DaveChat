@@ -52,12 +52,12 @@ func TestCheckOrigin_EmptyAllowedOrigins_FallbackToHost(t *testing.T) {
 	}
 }
 
-func TestCheckOrigin_EmptyAllowedOrigins_MissingOrigin_ReturnsFalse(t *testing.T) {
+func TestCheckOrigin_EmptyAllowedOrigins_MissingOrigin_ReturnsTrue(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	// No Origin header
 
-	if checkOrigin(req, nil) {
-		t.Error("expected missing origin to return false with no allowed origins")
+	if !checkOrigin(req, nil) {
+		t.Error("expected missing origin to return true with no allowed origins (unconfigured server)")
 	}
 }
 

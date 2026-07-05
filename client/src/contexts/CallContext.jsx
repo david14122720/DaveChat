@@ -87,16 +87,22 @@ export function CallProvider({ children }) {
     return () => navigator.mediaDevices.removeEventListener('devicechange', handler);
   }, []);
 
-  const getIceConfig = useCallback(() => {
-    if (iceConfigRef.current) {
-      return iceConfigRef.current;
+  const getIceConfig = useCallback(async () => {
+    if (iceConfigRef.current) return iceConfigRef.current;
+    try {
+      const cfg = await api.request('/api/config/webrtc');
+      iceConfigRef.current = cfg;
+      return cfg;
+    } catch {
+      const fallback = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      };
+      iceConfigRef.current = fallback;
+      return fallback;
     }
-    return {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-    };
   }, []);
 
   const cleanupCall = useCallback(() => {
@@ -169,7 +175,8 @@ export function CallProvider({ children }) {
   }, [state.callState]);
 
   const createPeerConnection = useCallback(async (remoteUserId, callType = 'audio') => {
-    const pc = new RTCPeerConnection(getIceConfig());
+    const iceConfig = await getIceConfig();
+    const pc = new RTCPeerConnection(iceConfig);
     pcRef.current = pc;
 
     let stream;
@@ -251,12 +258,6 @@ export function CallProvider({ children }) {
 
     return pc;
   }, [getIceConfig, cleanupCall, selectedAudioDevice]);
-
-  useEffect(() => {
-    api.request('/api/config/webrtc')
-      .then(cfg => { iceConfigRef.current = cfg; })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     wsClient.connect();

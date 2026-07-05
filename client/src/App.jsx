@@ -1,7 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { CallProvider } from './contexts/CallContext';
-import { wsClient } from './lib/websocket';
 import { Loader2 } from 'lucide-react';
 
 const AuthLayout = lazy(() => import('./components/AuthLayout'));
@@ -10,14 +9,6 @@ const CallUI = lazy(() => import('./components/CallUI'));
 
 function App() {
   const { user, loading, signIn, signUp, signOut } = useAuth();
-
-  useEffect(() => {
-    if (user) {
-      wsClient.connect();
-    } else {
-      wsClient.disconnect();
-    }
-  }, [user]);
 
   if (loading) {
     return (

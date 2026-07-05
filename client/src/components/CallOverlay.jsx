@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PhoneOff, Mic, MicOff, Video, User } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Video, User, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCall } from '../contexts/CallContext';
 
@@ -89,6 +89,24 @@ export default function CallOverlay() {
   };
 
   const [showMicPicker, setShowMicPicker] = useState(false);
+
+  if (callState === 'idle' && call.error) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center pb-24 pointer-events-none">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center gap-3 text-red-400 text-sm pointer-events-auto backdrop-blur-xl shadow-2xl">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p className="flex-1">{call.error}</p>
+          <button
+            onClick={resetCall}
+            className="text-red-400/60 hover:text-red-400 transition-colors text-lg leading-none"
+            title="Descartar"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!isVisible) return null;
 

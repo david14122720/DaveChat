@@ -53,7 +53,19 @@ const MainLayout = ({ user, onLogout }) => {
     const unsubPresence = wsClient.on('presence_update', handlePresenceUpdate);
     fetchProfiles();
     const interval = setInterval(fetchProfiles, 30000);
-    return () => { clearInterval(interval); unsubPresence(); };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProfiles();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      unsubPresence();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [handlePresenceUpdate]);
 
   useEffect(() => {

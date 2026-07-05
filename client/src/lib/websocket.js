@@ -7,6 +7,7 @@ class WebSocketClient {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.pendingMessages = [];
+    this.pingInterval = null;
   }
 
   connect() {
@@ -21,8 +22,11 @@ class WebSocketClient {
 
     this.ws = new WebSocket(url, [token]);
 
+    this._setupVisibilityHandler();
+
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
+      this._startPing();
       this._flushPending();
     };
 
@@ -36,6 +40,7 @@ class WebSocketClient {
     };
 
     this.ws.onclose = () => {
+      this._stopPing();
       this._emit('close', {});
       this._reconnect();
     };
@@ -66,6 +71,58 @@ class WebSocketClient {
     }
   }
 
+  _startPing() {
+    this._stopPing();
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 25000);
+  }
+
+  _stopPing() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  _setupVisibilityHandler() {
+    this._teardownVisibilityHandler();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[WS] Tab visible, reconnecting');
+        this.maxReconnectAttempts = 5;
+        if (this.ws) {
+          this.ws.onclose = null;
+          this.ws.close();
+          this.ws = null;
+        }
+        this.connect();
+      }
+    };
+    this._visibilityHandler = handleVisibility;
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    this._pageshowHandler = (event) => {
+      if (event.persisted) {
+        handleVisibility();
+      }
+    };
+    window.addEventListener('pageshow', this._pageshowHandler);
+  }
+
+  _teardownVisibilityHandler() {
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+    if (this._pageshowHandler) {
+      window.removeEventListener('pageshow', this._pageshowHandler);
+      this._pageshowHandler = null;
+    }
+  }
+
   send(type, payload = {}, target = '', extra = {}) {
     const msg = { type, payload, target, ...extra };
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -91,8 +148,11 @@ class WebSocketClient {
   }
 
   disconnect() {
+    this._teardownVisibilityHandler();
+    this._stopPing();
     this.maxReconnectAttempts = 0;
     if (this.ws) {
+      this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
     }

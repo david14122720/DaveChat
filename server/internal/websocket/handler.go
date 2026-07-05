@@ -34,7 +34,14 @@ type WSMessage struct {
 func checkOrigin(r *http.Request, allowedOrigins []string) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		return false
+		// Allow empty Origin when no real origins are configured (single-origin deployment).
+		// When AllowedOrigins has real entries, reject empty Origin (strict mode).
+		for _, a := range allowedOrigins {
+			if strings.TrimSpace(a) != "" {
+				return false
+			}
+		}
+		return true
 	}
 
 	// Always allow same-origin connections
